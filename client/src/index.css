@@ -1,0 +1,272 @@
+@import "tailwindcss";
+
+/*
+  Theme tokens - copied from the supplied design system so every page in
+  this app (and any future dashboard pages) looks like one product.
+  Change colors here, not inside individual components.
+*/
+:root {
+  --app-min-desktop-width: 1180px;
+
+  --bg: #ece8ff;
+  --surface-deep: #f5f2ff;
+  --text: #110d2d;
+  --muted: #6d668d;
+  --navy: #0c0828;
+  --indigo: #070362;
+  --royal: #1f0798;
+  --violet: #5d27ca;
+  --lavender: #8d57de;
+  --mist: #e9e5ff;
+  --success: #22b07d;
+  --danger: #d25f86;
+  --warning: #f59e0b;
+
+  --bg-rgb: 236 232 255;
+  --surface-deep-rgb: 245 242 255;
+  --mist-rgb: 233 229 255;
+  --text-rgb: 17 13 45;
+  --muted-rgb: 109 102 141;
+  --navy-rgb: 12 8 40;
+  --indigo-rgb: 7 3 98;
+  --royal-rgb: 31 7 152;
+  --violet-rgb: 93 39 202;
+  --lavender-rgb: 141 87 222;
+  --success-rgb: 34 176 125;
+  --danger-rgb: 210 95 134;
+
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", "Helvetica Neue", Arial, -apple-system,
+    BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: "Merriweather", Georgia, ui-serif, serif;
+
+  --executive-text-strong: var(--text);
+  --executive-text-muted: var(--muted);
+  --executive-button: var(--royal);
+  --executive-button-hover: var(--indigo);
+  --executive-success: var(--success);
+  --executive-warning: var(--warning);
+  --executive-error: var(--danger);
+
+  --chart-1: #5d27ca;
+  --chart-2: #8d57de;
+  --chart-3: #1f0798;
+  --chart-4: #b5a6f6;
+  --chart-5: #e9e5ff;
+  --chart-success: #22b07d;
+  --chart-danger: #d25f86;
+  --chart-warning: #f59e0b;
+  --chart-axis: #6d668d;
+  --chart-grid: rgb(12 8 40 / 0.12);
+}
+
+html {
+  font-size: 17px;
+}
+
+body {
+  margin: 0;
+  min-width: 0;
+  overflow-x: auto;
+  background: #eeeafc;
+  color: var(--executive-text-strong);
+  font-family: var(--font-ui);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  font-family: inherit;
+  line-height: inherit;
+  box-sizing: border-box;
+}
+
+#root {
+  min-height: 100vh;
+  background-color: transparent;
+}
+
+.font-display,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+.page-width {
+  width: 100%;
+  max-width: 96rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.executive-shell {
+  position: relative;
+  min-height: 100vh;
+  min-width: 0;
+  background: transparent;
+}
+
+@media (min-width: 768px) {
+  #root,
+  .executive-shell {
+    min-width: var(--app-min-desktop-width);
+  }
+}
+
+@media (max-width: 767px) {
+  html,
+  body,
+  #root,
+  .executive-shell {
+    min-width: 0;
+    overflow-x: hidden;
+  }
+}
+
+@keyframes blobDrift1 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate(80px, -60px) scale(1.1) rotate(8deg);
+  }
+  66% {
+    transform: translate(-40px, 70px) scale(0.92) rotate(-5deg);
+  }
+}
+
+.executive-shell::before {
+  content: "";
+  position: fixed;
+  width: 1100px;
+  height: 1100px;
+  border-radius: 50%;
+  top: -350px;
+  right: -250px;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    rgb(var(--lavender-rgb) / 0.44) 0%,
+    rgb(var(--violet-rgb) / 0.26) 40%,
+    transparent 70%
+  );
+  filter: blur(55px);
+  animation: blobDrift1 22s ease-in-out infinite;
+  z-index: 0;
+}
+
+.exec-blob-mid {
+  position: fixed;
+  width: 750px;
+  height: 750px;
+  border-radius: 50%;
+  top: 35%;
+  left: 22%;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    rgb(var(--violet-rgb) / 0.22) 0%,
+    rgb(var(--royal-rgb) / 0.12) 50%,
+    transparent 70%
+  );
+  filter: blur(50px);
+  animation: blobDrift1 34s ease-in-out infinite;
+  z-index: 0;
+}
+
+.executive-card {
+  background: #ffffff;
+  border: 1px solid rgb(var(--navy-rgb) / 0.09);
+  box-shadow: 0 1px 3px rgb(var(--navy-rgb) / 0.06), 0 8px 24px rgb(var(--navy-rgb) / 0.05);
+  border-radius: 20px;
+}
+
+.executive-card-soft {
+  background: #ffffff;
+  border: 1px solid rgb(var(--navy-rgb) / 0.08);
+  box-shadow: 0 1px 2px rgb(var(--navy-rgb) / 0.05), 0 4px 16px rgb(var(--navy-rgb) / 0.04);
+  border-radius: 16px;
+}
+
+.executive-glass {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgb(var(--navy-rgb) / 0.09);
+  box-shadow: 0 2px 8px rgb(var(--navy-rgb) / 0.06), 0 12px 32px rgb(var(--navy-rgb) / 0.05);
+  backdrop-filter: blur(16px);
+  border-radius: 20px;
+}
+
+.brand-button,
+.brand-button-soft,
+.brand-button-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease,
+    box-shadow 160ms ease, transform 160ms ease;
+}
+
+.brand-button {
+  border: 1px solid rgb(var(--royal-rgb) / 0.16);
+  background: linear-gradient(135deg, rgb(var(--violet-rgb) / 0.98), rgb(var(--royal-rgb) / 0.98));
+  color: #ffffff;
+  box-shadow: 0 14px 30px rgb(var(--royal-rgb) / 0.2);
+}
+
+.brand-button:hover {
+  background: linear-gradient(135deg, rgb(var(--royal-rgb) / 0.98), rgb(var(--indigo-rgb) / 0.98));
+  transform: translateY(-1px);
+}
+
+.brand-button-ghost {
+  border: 1px solid rgb(var(--navy-rgb) / 0.12);
+  background: rgb(255 255 255 / 0.9);
+  color: var(--executive-text-strong);
+}
+
+.brand-button-ghost:hover {
+  background: rgb(var(--violet-rgb) / 0.08);
+  border-color: rgb(var(--violet-rgb) / 0.18);
+}
+
+/* Pill labels used for category / match / mismatch badges */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.15rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.pill-success {
+  background: rgb(var(--success-rgb) / 0.12);
+  color: #0f7a55;
+  border: 1px solid rgb(var(--success-rgb) / 0.25);
+}
+
+.pill-danger {
+  background: rgb(var(--danger-rgb) / 0.12);
+  color: #a83060;
+  border: 1px solid rgb(var(--danger-rgb) / 0.25);
+}
+
+.pill-neutral {
+  background: rgb(var(--navy-rgb) / 0.06);
+  color: var(--muted);
+  border: 1px solid rgb(var(--navy-rgb) / 0.1);
+}

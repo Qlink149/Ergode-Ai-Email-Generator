@@ -1,0 +1,581 @@
+Match the current design system exactly: colors, gradients, glass surfaces, buttons, cards, navigation, chart palette, typography, shadows, and login styling.
+
+Tech/style context:
+- React + Vite frontend.
+- Tailwind CSS is used via `@import "tailwindcss";`.
+- Use CSS variables for the theme.
+- Use lucide-react icons where buttons/navigation need icons.
+- Keep the UI like an executive retail dashboard: clean white surfaces, lavender canvas, purple/indigo brand accents, soft shadows, subtle glass blur, rounded cards, compact dashboard layout.
+- Avoid random new colors. Use the token system below.
+
+Add or merge this theme CSS into the global stylesheet, preferably `src/index.css`:
+
+```css
+@import "tailwindcss";
+
+:root {
+  --app-min-desktop-width: 1180px;
+
+  --bg: #ECE8FF;
+  --surface-deep: #F5F2FF;
+  --text: #110D2D;
+  --muted: #6D668D;
+  --navy: #0C0828;
+  --indigo: #070362;
+  --royal: #1F0798;
+  --violet: #5D27CA;
+  --lavender: #8D57DE;
+  --mist: #E9E5FF;
+  --success: #22B07D;
+  --danger: #D25F86;
+  --warning: #F59E0B;
+
+  --bg-rgb: 236 232 255;
+  --surface-deep-rgb: 245 242 255;
+  --mist-rgb: 233 229 255;
+  --text-rgb: 17 13 45;
+  --muted-rgb: 109 102 141;
+  --navy-rgb: 12 8 40;
+  --indigo-rgb: 7 3 98;
+  --royal-rgb: 31 7 152;
+  --violet-rgb: 93 39 202;
+  --lavender-rgb: 141 87 222;
+  --success-rgb: 34 176 125;
+  --danger-rgb: 210 95 134;
+
+  --font-ui: "Overused Grotesk", "Segoe UI Variable Text", "Aptos", "Segoe UI", "Helvetica Neue", Arial, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: "Merriweather", Georgia, ui-serif, serif;
+  --font-accent: "Merriweather", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+
+  --executive-ink: #ffffff;
+  --executive-navy: var(--bg);
+  --executive-deep: var(--navy);
+  --executive-button: var(--royal);
+  --executive-button-hover: var(--indigo);
+  --executive-text-strong: var(--text);
+  --executive-text-body: color-mix(in srgb, var(--text) 84%, var(--bg));
+  --executive-text-muted: var(--muted);
+  --executive-line: rgb(var(--navy-rgb) / 0.14);
+  --executive-surface: rgb(var(--surface-deep-rgb) / 0.94);
+  --executive-surface-soft: rgb(var(--bg-rgb) / 0.9);
+  --executive-glow: rgb(var(--indigo-rgb) / 0.16);
+  --executive-primary: var(--royal);
+  --executive-primary-hover: var(--indigo);
+  --executive-accent: var(--violet);
+  --executive-neon: var(--lavender);
+  --executive-success: var(--success);
+  --executive-warning: var(--warning);
+  --executive-error: var(--danger);
+
+  --chart-1: #5d27ca;
+  --chart-2: #8d57de;
+  --chart-3: #1f0798;
+  --chart-4: #b5a6f6;
+  --chart-5: #e9e5ff;
+  --chart-success: #22b07d;
+  --chart-danger: #d25f86;
+  --chart-warning: #f59e0b;
+  --chart-axis: #6d668d;
+  --chart-grid: rgb(12 8 40 / 0.12);
+  --chart-cursor: rgb(93 39 202 / 0.14);
+}
+
+html {
+  font-size: 17px;
+}
+
+body {
+  margin: 0;
+  min-width: 0;
+  overflow-x: auto;
+  background: #eeeafc;
+  color: var(--executive-text-strong);
+  font-family: var(--font-ui);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*, *::before, *::after {
+  font-family: inherit;
+  line-height: inherit;
+  box-sizing: border-box;
+}
+
+#root {
+  min-height: 100vh;
+  background-color: transparent;
+}
+
+.font-display,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+.font-accent {
+  font-family: var(--font-accent);
+}
+
+.page-width {
+  width: 100%;
+  max-width: 108rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.executive-shell {
+  position: relative;
+  min-height: 100vh;
+  min-width: 0;
+  background: transparent;
+}
+
+@media (min-width: 768px) {
+  #root,
+  .executive-shell {
+    min-width: var(--app-min-desktop-width);
+  }
+}
+
+@media (max-width: 767px) {
+  html,
+  body,
+  #root,
+  .executive-shell {
+    min-width: 0;
+    overflow-x: hidden;
+  }
+}
+
+@keyframes blobDrift1 {
+  0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  33% { transform: translate(80px, -60px) scale(1.1) rotate(8deg); }
+  66% { transform: translate(-40px, 70px) scale(0.92) rotate(-5deg); }
+}
+
+@keyframes blobDrift2 {
+  0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  40% { transform: translate(-90px, -60px) scale(1.08) rotate(-10deg); }
+  70% { transform: translate(60px, 80px) scale(0.94) rotate(6deg); }
+}
+
+@keyframes blobDrift3 {
+  0%, 100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  50% { transform: translate(70px, 50px) scale(1.07) rotate(12deg); }
+}
+
+.executive-shell::before {
+  content: "";
+  position: fixed;
+  width: 1100px;
+  height: 1100px;
+  border-radius: 50%;
+  top: -350px;
+  right: -250px;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    rgb(var(--lavender-rgb) / 0.44) 0%,
+    rgb(var(--violet-rgb) / 0.26) 40%,
+    transparent 70%
+  );
+  filter: blur(55px);
+  animation: blobDrift1 22s ease-in-out infinite;
+  z-index: 0;
+}
+
+.executive-shell::after {
+  content: "";
+  position: fixed;
+  width: 900px;
+  height: 900px;
+  border-radius: 50%;
+  bottom: -250px;
+  left: -180px;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    rgb(var(--success-rgb) / 0.32) 0%,
+    rgba(34, 176, 125, 0.16) 40%,
+    transparent 70%
+  );
+  filter: blur(55px);
+  animation: blobDrift2 28s ease-in-out infinite;
+  z-index: 0;
+}
+
+.exec-blob-mid {
+  position: fixed;
+  width: 750px;
+  height: 750px;
+  border-radius: 50%;
+  top: 35%;
+  left: 22%;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    rgb(var(--violet-rgb) / 0.22) 0%,
+    rgb(var(--royal-rgb) / 0.12) 50%,
+    transparent 70%
+  );
+  filter: blur(50px);
+  animation: blobDrift3 34s ease-in-out infinite;
+  z-index: 0;
+}
+
+.executive-card {
+  background: #ffffff;
+  border: 1px solid rgb(var(--navy-rgb) / 0.09);
+  box-shadow: 0 1px 3px rgb(var(--navy-rgb) / 0.06), 0 8px 24px rgb(var(--navy-rgb) / 0.05);
+  border-radius: 20px;
+}
+
+.executive-card-soft {
+  background: #ffffff;
+  border: 1px solid rgb(var(--navy-rgb) / 0.08);
+  box-shadow: 0 1px 2px rgb(var(--navy-rgb) / 0.05), 0 4px 16px rgb(var(--navy-rgb) / 0.04);
+  border-radius: 16px;
+}
+
+.executive-glass {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgb(var(--navy-rgb) / 0.09);
+  box-shadow: 0 2px 8px rgb(var(--navy-rgb) / 0.06), 0 12px 32px rgb(var(--navy-rgb) / 0.05);
+  backdrop-filter: blur(16px);
+  border-radius: 20px;
+}
+
+.executive-divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgb(var(--navy-rgb) / 0.32),
+    rgb(var(--indigo-rgb) / 0.18),
+    transparent 60%
+  );
+}
+
+.executive-pill {
+  border: 1px solid rgb(var(--navy-rgb) / 0.12);
+  background: rgb(255 255 255 / 0.88);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 0 1px rgb(var(--navy-rgb) / 0.02);
+  backdrop-filter: blur(10px);
+}
+
+.brand-button,
+.brand-button-soft,
+.brand-button-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.brand-button {
+  border: 1px solid rgb(var(--royal-rgb) / 0.16);
+  background: linear-gradient(135deg, rgb(var(--violet-rgb) / 0.98), rgb(var(--royal-rgb) / 0.98));
+  color: #ffffff;
+  box-shadow: 0 14px 30px rgb(var(--royal-rgb) / 0.2);
+}
+
+.brand-button:hover {
+  background: linear-gradient(135deg, rgb(var(--royal-rgb) / 0.98), rgb(var(--indigo-rgb) / 0.98));
+  transform: translateY(-1px);
+}
+
+.brand-button-soft {
+  border: 1px solid rgb(var(--royal-rgb) / 0.14);
+  background: rgb(var(--royal-rgb) / 0.08);
+  color: var(--executive-button);
+}
+
+.brand-button-soft:hover,
+.brand-button-ghost:hover {
+  background: rgb(var(--violet-rgb) / 0.08);
+  border-color: rgb(var(--violet-rgb) / 0.18);
+}
+
+.brand-button-ghost {
+  border: 1px solid rgb(var(--navy-rgb) / 0.12);
+  background: rgb(255 255 255 / 0.9);
+  color: var(--executive-text-strong);
+}
+
+.brand-input,
+.brand-select {
+  border: 1px solid rgb(var(--navy-rgb) / 0.12);
+  background: rgb(255 255 255 / 0.94);
+  color: var(--executive-text-strong);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5);
+}
+
+.brand-input:focus,
+.brand-select:focus {
+  outline: none;
+  border-color: rgb(var(--violet-rgb) / 0.26);
+  box-shadow: 0 0 0 4px rgb(var(--violet-rgb) / 0.1);
+}
+
+.chart-surface {
+  background: #ffffff;
+  border: 1px solid rgb(var(--navy-rgb) / 0.09);
+  box-shadow: 0 1px 3px rgb(var(--navy-rgb) / 0.05), 0 8px 24px rgb(var(--navy-rgb) / 0.05);
+}
+Use this shell/header pattern for dashboard pages:
+const AppShell = ({ badge, title, description, actions = [], toolbar, children }) => {
+  return (
+    <div className="executive-shell min-h-screen text-slate-900">
+      <div className="exec-blob-mid" />
+
+      <div
+        className="sticky top-0 z-[60] h-[2px] w-full"
+        style={{
+          background:
+            "linear-gradient(90deg, rgb(var(--royal-rgb)/0.85) 0%, rgb(var(--lavender-rgb)/0.35) 55%, transparent 100%)",
+        }}
+      />
+
+      <header
+        className="sticky top-[2px] z-50 backdrop-blur-xl"
+        style={{
+          background: "rgba(255,255,255,0.94)",
+          borderBottom: "1px solid rgb(var(--navy-rgb)/0.09)",
+          boxShadow:
+            "0 1px 2px rgb(var(--navy-rgb)/0.04), 0 4px 20px rgb(var(--navy-rgb)/0.04)",
+        }}
+      >
+        <div className="page-width px-4 sm:px-6 lg:px-8">
+          <div className="flex h-14 items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <img src="/logo.png" alt="Nilkamal Sleep" className="h-7 w-auto shrink-0 object-contain sm:h-8" />
+
+              {(badge || title) && (
+                <div className="hidden min-w-0 items-center gap-2 sm:flex">
+                  <div className="h-4 w-px" style={{ background: "rgb(var(--navy-rgb)/0.14)" }} />
+                  {badge && (
+                    <span
+                      className="rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.20em]"
+                      style={{
+                        background: "rgb(var(--royal-rgb)/0.08)",
+                        border: "1px solid rgb(var(--royal-rgb)/0.14)",
+                        color: "rgb(var(--royal-rgb)/1)",
+                      }}
+                    >
+                      {badge}
+                    </span>
+                  )}
+                  {title && <h1 className="truncate text-sm font-semibold leading-none text-slate-900">{title}</h1>}
+                  {description && <span className="hidden truncate text-xs text-slate-400 lg:inline">· {description}</span>}
+                </div>
+              )}
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              {actions.map((action) => (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={action.onClick}
+                  className={action.variant === "primary" ? "brand-button px-4 py-2 text-sm" : "brand-button-ghost px-4 py-2 text-sm"}
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {toolbar && (
+            <div className="py-2" style={{ borderTop: "1px solid rgb(var(--navy-rgb)/0.08)" }}>
+              {toolbar}
+            </div>
+          )}
+        </div>
+      </header>
+
+      <main className="page-width relative z-10 px-4 py-8 pb-28 sm:px-6 sm:pb-8 lg:px-8">
+        {children}
+      </main>
+    </div>
+  );
+};
+Use this navigation styling:
+.nav-link-active {
+  background: linear-gradient(135deg, rgba(141,87,222,0.13) 0%, rgba(31,7,152,0.09) 100%);
+  color: #5d27ca !important;
+  border: 1px solid rgba(93,39,202,0.18);
+}
+
+.nav-link-active .nav-icon {
+  filter: drop-shadow(0 0 5px rgba(93,39,202,0.45));
+  color: #5d27ca;
+}
+
+.nav-link-idle {
+  color: #6d668d;
+  border: 1px solid transparent;
+}
+
+.nav-link-idle:hover {
+  background: rgba(12,8,40,0.055);
+  color: #110d2d !important;
+}
+
+.nav-link-idle .nav-icon {
+  color: #8d57de;
+  opacity: 0.55;
+}
+
+.nav-link-idle:hover .nav-icon {
+  opacity: 0.85;
+  color: #5d27ca;
+}
+Navigation container style:
+<nav
+  className="sticky top-0 z-50"
+  style={{
+    background: "rgba(255,255,255,0.95)",
+    borderBottom: "1px solid rgba(12,8,40,0.09)",
+    boxShadow: "0 1px 2px rgba(12,8,40,0.04), 0 3px 16px rgba(12,8,40,0.04)",
+    backdropFilter: "blur(20px)",
+  }}
+>
+  <div
+    className="absolute left-0 right-0 top-0 h-[2px]"
+    style={{
+      background:
+        "linear-gradient(90deg, rgba(31,7,152,0.88) 0%, rgba(141,87,222,0.42) 52%, transparent 100%)",
+    }}
+  />
+</nav>
+Login page design:
+Split layout on desktop.
+Left panel: dark Clara.ai brand panel with layered purple/indigo gradients and optional mesh image overlay.
+Right panel: clean light form area with purple bloom, Nilkamal logo, pill badge, white inputs, purple gradient button.
+Use this exact login background gradient for the left panel:
+style={{
+  background: `
+    radial-gradient(ellipse 66% 56% at 92% 6%, rgba(118,48,242,0.97) 0%, rgba(78,28,208,0.72) 26%, rgba(42,14,165,0.38) 52%, transparent 70%),
+    radial-gradient(ellipse 64% 54% at 82% 60%, rgba(16,9,148,0.99) 0%, rgba(11,7,112,0.88) 30%, rgba(7,4,72,0.54) 58%, transparent 78%),
+    radial-gradient(ellipse 44% 36% at 90% 96%, rgba(102,36,214,0.68) 0%, rgba(66,20,178,0.40) 44%, transparent 64%),
+    radial-gradient(ellipse 30% 24% at 15% 82%, rgba(58,18,162,0.30) 0%, transparent 56%),
+    radial-gradient(ellipse 50% 44% at 50% 50%, rgba(20,10,80,0.22) 0%, transparent 65%),
+    linear-gradient(142deg, #020110 0%, #040220 26%, #07042a 62%, #030116 100%)
+  `,
+}}
+Login button:
+<button
+  className="h-12 w-full rounded-xl text-sm font-semibold text-white outline-none transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
+  style={{
+    background: "linear-gradient(135deg, #8d57de 0%, #5d27ca 50%, #1f0798 100%)",
+    boxShadow: "0 12px 32px rgba(93,39,202,0.32)",
+  }}
+>
+  Sign in
+</button>
+Login button hover CSS:
+.login-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #a67dff 0%, #8d57de 45%, #5d27ca 100%) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 18px 44px rgba(93,39,202,0.44) !important;
+}
+
+.login-input:focus {
+  border-color: rgba(93,39,202,0.38) !important;
+  box-shadow: 0 0 0 4px rgba(93,39,202,0.10) !important;
+  background: #ffffff !important;
+}
+Chart theme:
+Create src/components/charts/brandChartTheme.jsx and use it for Recharts/analytics components.
+import React from "react";
+
+export const BRAND_COLORS = {
+  primary: "#5d27ca",
+  deep: "#1f0798",
+  soft: "#8d57de",
+  lavender: "#b5a6f6",
+  mist: "#e9e5ff",
+  midnight: "#070362",
+  navy: "#0c0828",
+  success: "#22b07d",
+  danger: "#d25f86",
+  warning: "#f59e0b",
+};
+
+export const BRAND_SERIES_COLORS = [
+  "#5d27ca",
+  "#8d57de",
+  "#1f0798",
+  "#b5a6f6",
+  "#070362",
+  "#e9e5ff",
+  "#22b07d",
+  "#d25f86",
+  "#f59e0b",
+];
+
+export const BRAND_CHART_TONES = {
+  primary: ["#8d57de", "#1f0798"],
+  secondary: ["#b5a6f6", "#5d27ca"],
+  deep: ["#5d27ca", "#070362"],
+  soft: ["#e9e5ff", "#8d57de"],
+  success: ["#22b07d", "#0f7a55"],
+  danger: ["#d25f86", "#a83060"],
+  warning: ["#f59e0b", "#b45309"],
+};
+
+export const BRAND_CHART_AXIS = "#6d668d";
+export const BRAND_CHART_GRID = "rgba(12, 8, 40, 0.12)";
+export const BRAND_CHART_CURSOR = "rgba(93, 39, 202, 0.14)";
+
+export const BrandChartGradient = ({ id, variant = "primary", direction = "vertical" }) => {
+  const [from, to] = BRAND_CHART_TONES[variant] ?? BRAND_CHART_TONES.primary;
+  const axis =
+    direction === "horizontal"
+      ? { x1: "0", y1: "0", x2: "1", y2: "0" }
+      : { x1: "0", y1: "0", x2: "0", y2: "1" };
+
+  return (
+    <linearGradient id={id} {...axis}>
+      <stop offset="0%" stopColor={from} stopOpacity={1} />
+      <stop offset="100%" stopColor={to} stopOpacity={1} />
+    </linearGradient>
+  );
+};
+
+export const BrandAreaGradient = ({ id, variant = "primary" }) => {
+  const [from] = BRAND_CHART_TONES[variant] ?? BRAND_CHART_TONES.primary;
+  return (
+    <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+      <stop offset="5%" stopColor={from} stopOpacity={0.28} />
+      <stop offset="95%" stopColor={from} stopOpacity={0.03} />
+    </linearGradient>
+  );
+};
+
+export const brandDonutSegments = (pct, total = 100) => {
+  const rest = total - pct;
+  return `conic-gradient(${BRAND_COLORS.primary} 0 ${pct}%, ${BRAND_COLORS.lavender} ${pct}% ${pct + rest * 0.48}%, ${BRAND_COLORS.mist} ${pct + rest * 0.48}% 100%)`;
+};
+Implementation instructions:
+Replace scattered blue/sky/indigo/orange dashboard styling with the token colors above.
+Use .executive-shell as the outer wrapper for all authenticated dashboard pages.
+Add <div className="exec-blob-mid" /> inside dashboard shells for the third animated bloom.
+Use .executive-card, .executive-card-soft, .executive-glass, .chart-surface, .brand-button, .brand-button-soft, .brand-button-ghost, .brand-input, and .brand-select consistently.
+Keep cards white, borders low contrast, shadows soft, and background lavender.
+Use primary gradients:Main button: linear-gradient(135deg, #8d57de 0%, #5d27ca 50%, #1f0798 100%)
+Compact active/button gradient: linear-gradient(135deg,#8d57de,#5d27ca)
+Header stripe: linear-gradient(90deg, rgba(31,7,152,0.88) 0%, rgba(141,87,222,0.42) 52%, transparent 100%)
+Dashboard divider: linear-gradient(90deg, rgb(var(--navy-rgb) / 0.32), rgb(var(--indigo-rgb) / 0.18), transparent 60%)
+
+Keep typography compact and professional. Use display serif only for headings.
+Verify mobile and desktop: no text overlap, no horizontal overflow on mobile, nav remains usable, dashboard cards remain readable.
+Do not create a landing page. The first screen should be the actual dashboard/login experience.
