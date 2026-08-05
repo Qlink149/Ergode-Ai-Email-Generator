@@ -11,7 +11,9 @@
  * are deployed as separate Vercel projects.
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || "";
+// .replace() strips a trailing slash - VITE_API_URL="https://x.vercel.app/"
+// would otherwise produce double-slash URLs like ".../app//api/tickets".
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 async function handleResponse(response) {
   if (!response.ok) {
