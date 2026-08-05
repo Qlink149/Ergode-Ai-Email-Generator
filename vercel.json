@@ -4,9 +4,6 @@
     { "src": "server/server.js", "use": "@vercel/node" },
     { "src": "pipeline/api.py", "use": "@vercel/python" }
   ],
-  "functions": {
-    "pipeline/api.py": { "maxDuration": 60 }
-  },
   "routes": [
     { "src": "/pyapi/(.*)", "dest": "pipeline/api.py" },
     { "src": "/(.*)", "dest": "server/server.js" }
