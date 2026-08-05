@@ -11,7 +11,18 @@ Run with:
     uvicorn api:app --port 8001 --reload
 """
 
+import sys
+from pathlib import Path
 from typing import List, Optional
+
+# Vercel's Python runtime loads this file as the entry point but does not
+# add its own directory to sys.path, so the plain sibling imports below
+# (from config import ..., from draft_generator import ...) fail with
+# "ModuleNotFoundError: No module named 'config'" once deployed, even
+# though they work fine locally (where we always run from inside
+# pipeline/, so the directory is on sys.path implicitly). This makes that
+# true in both places.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fastapi import FastAPI
 from pydantic import BaseModel
