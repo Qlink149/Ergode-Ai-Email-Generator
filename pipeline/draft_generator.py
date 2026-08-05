@@ -15,6 +15,7 @@ format_user_prompt(), not this file's structure.
 """
 
 from datetime import datetime, timezone
+from typing import List, Optional
 
 from openai import OpenAI
 
@@ -55,7 +56,7 @@ def save_system_prompt(content: str) -> int:
     return next_version
 
 
-def _days_since(date_string: str | None) -> int | None:
+def _days_since(date_string: Optional[str]) -> Optional[int]:
     """Best-effort day count between a YYYY-MM-DD... date string and today."""
     if not date_string:
         return None
@@ -66,7 +67,7 @@ def _days_since(date_string: str | None) -> int | None:
     return (datetime.now() - parsed).days
 
 
-def format_order_facts(order_facts: dict) -> list[str]:
+def format_order_facts(order_facts: dict) -> List[str]:
     """
     Turn verified, customer-safe order/shipment facts (pulled from the real
     Order API - see server/services/disclosureClassifier.js) into prompt
@@ -244,7 +245,7 @@ def format_user_prompt(context: dict) -> str:
     return "\n".join(lines)
 
 
-def generate_draft(context: dict, client: OpenAI | None = None) -> str:
+def generate_draft(context: dict, client: Optional[OpenAI] = None) -> str:
     """Call OpenAI with the system prompt + this case's context, return the draft text."""
     require_openai_key()
     client = client or OpenAI(api_key=OPENAI_API_KEY)

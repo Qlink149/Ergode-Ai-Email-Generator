@@ -12,6 +12,7 @@ model call for this phase.
 """
 
 import json
+from typing import Optional
 
 from openai import OpenAI
 
@@ -48,7 +49,7 @@ _FALLBACK_RESULT = {
 }
 
 
-def analyze_message(customer_message: str, draft_reply: str, client: OpenAI | None = None) -> dict:
+def analyze_message(customer_message: str, draft_reply: str, client: Optional[OpenAI] = None) -> dict:
     """Ask the model to score one customer-message-and-draft-reply pair."""
     require_openai_key()
     client = client or OpenAI(api_key=OPENAI_API_KEY)

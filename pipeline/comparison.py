@@ -19,6 +19,7 @@ separate things:
 
 import re
 from difflib import SequenceMatcher
+from typing import Dict, List
 
 # --- Fact extraction patterns -------------------------------------------
 
@@ -60,7 +61,7 @@ CATEGORY_KEYWORDS = {
 }
 
 
-def extract_facts(text: str) -> dict[str, list[str]]:
+def extract_facts(text: str) -> Dict[str, List[str]]:
     """Pull out the concrete, checkable facts mentioned in a piece of text."""
     return {
         "order_ids": ORDER_ID_PATTERN.findall(text),

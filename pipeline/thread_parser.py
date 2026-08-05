@@ -22,6 +22,7 @@ the zip again.
 import re
 import zipfile
 from pathlib import Path
+from typing import Dict, List, Optional
 
 from config import ZIP_PATH
 from db import get_db
@@ -44,7 +45,7 @@ RELAY_PHRASES = [
 ORDER_ID_INLINE_PATTERN = re.compile(r"Order (?:ID|number):\s*([A-Z0-9\-]+)", re.IGNORECASE)
 
 
-def extract_order_id(raw_text: str) -> str | None:
+def extract_order_id(raw_text: str) -> Optional[str]:
     """
     Pull the order id out of the raw text. Amazon uses more than one
     layout for this across notice types: a line ENDING in "Order ID:"
@@ -103,7 +104,7 @@ def is_relay_message(customer_text: str) -> bool:
 RETURN_NOTICE_HEADERS = ["Order Item", "ASIN", "SKU", "Return Quantity", "Return Reason"]
 
 
-def extract_return_authorization_details(raw_text: str) -> dict | None:
+def extract_return_authorization_details(raw_text: str) -> Optional[dict]:
     """
     Parse Amazon's fixed-format 'Return authorization request' system
     notice - a structured table (product / ASIN / SKU / quantity / return
@@ -159,7 +160,7 @@ def is_cancellation_notice(raw_text: str) -> bool:
     return lowered.startswith("hello,") and "cancellation request" in lowered[:400]
 
 
-def extract_a_to_z_claim_details(raw_text: str) -> dict | None:
+def extract_a_to_z_claim_details(raw_text: str) -> Optional[dict]:
     """
     Parse Amazon's A-to-z Guarantee claim notice. Low volume (~1% of the
     corpus) but high-risk: it carries a hard 72-hour deadline and a
@@ -232,12 +233,12 @@ def parse_outbound_message(raw_text: str) -> dict:
     }
 
 
-def parse_zip(zip_path: Path = ZIP_PATH) -> dict[str, list[dict]]:
+def parse_zip(zip_path: Path = ZIP_PATH) -> Dict[str, List[dict]]:
     """
     Read the whole zip and return {thread_id: [messages...]}, each thread's
     messages sorted in the order they actually happened.
     """
-    threads: dict[str, list[dict]] = {}
+    threads: Dict[str, List[dict]] = {}
 
     with zipfile.ZipFile(zip_path) as archive:
         for entry in archive.namelist():
@@ -270,7 +271,7 @@ def parse_zip(zip_path: Path = ZIP_PATH) -> dict[str, list[dict]]:
     return threads
 
 
-def save_parsed_threads(threads: dict[str, list[dict]]) -> None:
+def save_parsed_threads(threads: Dict[str, List[dict]]) -> None:
     """
     Write every thread into the "parsed_threads" MongoDB collection, one
     document per thread. Upserts by thread_id so re-parsing updates
@@ -285,7 +286,7 @@ def save_parsed_threads(threads: dict[str, list[dict]]) -> None:
         )
 
 
-def load_parsed_threads() -> dict[str, list[dict]]:
+def load_parsed_threads() -> Dict[str, List[dict]]:
     """Read back the threads saved by save_parsed_threads()."""
     collection = get_db()["parsed_threads"]
     return {doc["thread_id"]: doc["messages"] for doc in collection.find({})}

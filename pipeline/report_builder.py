@@ -11,6 +11,7 @@ report file used to do, silently, every time the pipeline ran).
 """
 
 from datetime import datetime, timezone
+from typing import List
 
 from db import get_db
 
@@ -20,7 +21,7 @@ def _fact_fully_matched(fact_diff: dict) -> bool:
     return all(len(entry["missing"]) == 0 for entry in fact_diff.values())
 
 
-def build_summary(cases: list[dict]) -> dict:
+def build_summary(cases: List[dict]) -> dict:
     """Roll up all cases into the headline numbers for the scorecard."""
     total = len(cases)
     if total == 0:
@@ -38,7 +39,7 @@ def build_summary(cases: list[dict]) -> dict:
     }
 
 
-def build_report(cases: list[dict]) -> dict:
+def build_report(cases: List[dict]) -> dict:
     """Assemble the full report object: summary + every case's detail."""
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),

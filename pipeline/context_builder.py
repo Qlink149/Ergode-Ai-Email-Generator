@@ -12,10 +12,12 @@ real reply it is being compared against - that would defeat the point of
 the comparison.
 """
 
+from typing import Dict, List, Optional
+
 from thread_parser import load_parsed_threads
 
 
-def find_order_id(messages: list[dict], up_to_index: int) -> str | None:
+def find_order_id(messages: List[dict], up_to_index: int) -> Optional[str]:
     """
     Walk backward from up_to_index looking for the first known order id.
 
@@ -29,7 +31,7 @@ def find_order_id(messages: list[dict], up_to_index: int) -> str | None:
     return None
 
 
-def build_eval_cases(messages: list[dict]) -> list[dict]:
+def build_eval_cases(messages: List[dict]) -> List[dict]:
     """
     Turn one thread's messages into a list of eval cases - one per outbound
     reply that has at least one customer message before it to respond to.
@@ -82,7 +84,7 @@ def build_eval_cases(messages: list[dict]) -> list[dict]:
     return cases
 
 
-def build_all_eval_cases() -> dict[str, list[dict]]:
+def build_all_eval_cases() -> Dict[str, List[dict]]:
     """Build eval cases for every parsed thread. Returns {thread_id: [cases]}."""
     threads = load_parsed_threads()
     return {

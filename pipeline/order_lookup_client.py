@@ -17,11 +17,12 @@ the whole batch over a single lookup miss.
 import json
 import urllib.error
 import urllib.request
+from typing import Optional
 
 from config import SERVER_URL
 
 
-def fetch_order_facts(order_id: str | None) -> dict | None:
+def fetch_order_facts(order_id: Optional[str]) -> Optional[dict]:
     """
     Return order facts for one order id, or None on any failure: the
     customer-safe fields, plus `internal_status_note` (a plain-English

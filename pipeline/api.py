@@ -11,6 +11,8 @@ Run with:
     uvicorn api:app --port 8001 --reload
 """
 
+from typing import List, Optional
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 from openai import OpenAI
@@ -33,17 +35,17 @@ class OrderFacts(BaseModel):
     server/services/disclosureClassifier.js.
     """
 
-    recipient_name: str | None = None
-    product_name: str | None = None
-    carrier_name: str | None = None
-    tracking_id: str | None = None
-    tracking_url: str | None = None
-    shipped_date: str | None = None
-    purchase_date: str | None = None
-    customer_tracking_status: str | None = None
+    recipient_name: Optional[str] = None
+    product_name: Optional[str] = None
+    carrier_name: Optional[str] = None
+    tracking_id: Optional[str] = None
+    tracking_url: Optional[str] = None
+    shipped_date: Optional[str] = None
+    purchase_date: Optional[str] = None
+    customer_tracking_status: Optional[str] = None
     # Plain-English order status (e.g. "Cancelled") for the AI's reasoning
     # only - draft_generator.py is responsible for keeping it out of output.
-    internal_status_note: str | None = None
+    internal_status_note: Optional[str] = None
 
 
 class GenerateRequest(BaseModel):
@@ -51,11 +53,11 @@ class GenerateRequest(BaseModel):
     # crmThreadApiClient.js), generation can still proceed as a proactive
     # status update from order_facts alone.
     customer_message: str = ""
-    order_id: str | None = None
+    order_id: Optional[str] = None
     is_relay: bool = False
-    thread_history: list[ThreadHistoryEntry] = []
-    language: str | None = None  # e.g. "Spanish" - overrides auto-detection when set
-    order_facts: OrderFacts | None = None  # real, verified data from the Order API
+    thread_history: List[ThreadHistoryEntry] = []
+    language: Optional[str] = None  # e.g. "Spanish" - overrides auto-detection when set
+    order_facts: Optional[OrderFacts] = None  # real, verified data from the Order API
 
 
 class GenerateResponse(BaseModel):

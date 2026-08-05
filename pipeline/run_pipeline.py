@@ -16,6 +16,7 @@ Usage:
 """
 
 import argparse
+from typing import List, Optional
 
 from openai import OpenAI
 
@@ -35,7 +36,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def collect_cases(thread_filter: str | None) -> list[dict]:
+def collect_cases(thread_filter: Optional[str]) -> List[dict]:
     """Flatten {thread_id: [cases]} into one list, each case tagged with its thread id."""
     all_cases = build_all_eval_cases()
     flat = []
