@@ -17,7 +17,7 @@ format_user_prompt(), not this file's structure.
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from openai import OpenAI
+from openai import BadRequestError, OpenAI
 
 from config import OPENAI_API_KEY, OPENAI_MODEL, SYSTEM_PROMPT_SEED_PATH, require_openai_key
 from db import get_db
@@ -246,17 +246,29 @@ def format_user_prompt(context: dict) -> str:
 
 
 def generate_draft(context: dict, client: Optional[OpenAI] = None) -> str:
-    """Call OpenAI with the system prompt + this case's context, return the draft text."""
+    """
+    Call OpenAI with the system prompt + this case's context, return the
+    draft text. Some models (reasoning-style ones like gpt-5.6-luna, same
+    as OpenAI's o1/o3 family) reject any custom temperature and only allow
+    their default - rather than hardcode a list of which models that
+    applies to (a list that goes stale the moment a new model ships), just
+    try our preferred temperature first and drop it if the model says no.
+    """
     require_openai_key()
     client = client or OpenAI(api_key=OPENAI_API_KEY)
 
-    response = client.chat.completions.create(
-        model=OPENAI_MODEL,
-        messages=[
-            {"role": "system", "content": load_system_prompt()},
-            {"role": "user", "content": format_user_prompt(context)},
-        ],
-        temperature=0.4,
-    )
+    messages = [
+        {"role": "system", "content": load_system_prompt()},
+        {"role": "user", "content": format_user_prompt(context)},
+    ]
+
+    try:
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL, messages=messages, temperature=0.4
+        )
+    except BadRequestError as err:
+        if "temperature" not in str(err):
+            raise
+        response = client.chat.completions.create(model=OPENAI_MODEL, messages=messages)
 
     return response.choices[0].message.content.strip()

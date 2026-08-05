@@ -14,7 +14,7 @@ model call for this phase.
 import json
 from typing import Optional
 
-from openai import OpenAI
+from openai import BadRequestError, OpenAI
 
 from config import OPENAI_API_KEY, OPENAI_MODEL, require_openai_key
 
@@ -54,18 +54,24 @@ def analyze_message(customer_message: str, draft_reply: str, client: Optional[Op
     require_openai_key()
     client = client or OpenAI(api_key=OPENAI_API_KEY)
 
-    response = client.chat.completions.create(
-        model=OPENAI_MODEL,
-        messages=[
-            {"role": "system", "content": ANALYSIS_INSTRUCTIONS},
-            {
-                "role": "user",
-                "content": f"Customer message:\n{customer_message}\n\nDraft reply:\n{draft_reply}",
-            },
-        ],
-        temperature=0,
-        response_format={"type": "json_object"},
-    )
+    messages = [
+        {"role": "system", "content": ANALYSIS_INSTRUCTIONS},
+        {
+            "role": "user",
+            "content": f"Customer message:\n{customer_message}\n\nDraft reply:\n{draft_reply}",
+        },
+    ]
+    kwargs = {"model": OPENAI_MODEL, "messages": messages, "response_format": {"type": "json_object"}}
+
+    try:
+        # temperature=0 for consistent scoring - dropped if the model
+        # (e.g. gpt-5.6-luna) only allows its default. See
+        # draft_generator.py's generate_draft() for the same pattern.
+        response = client.chat.completions.create(**kwargs, temperature=0)
+    except BadRequestError as err:
+        if "temperature" not in str(err):
+            raise
+        response = client.chat.completions.create(**kwargs)
 
     try:
         result = json.loads(response.choices[0].message.content)
