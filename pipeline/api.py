@@ -24,7 +24,7 @@ from typing import List, Optional
 # true in both places.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from pydantic import BaseModel
 from openai import OpenAI
 
@@ -33,6 +33,15 @@ from draft_generator import generate_draft, load_system_prompt, save_system_prom
 from analysis import analyze_message
 
 app = FastAPI(title="Ergode AI Pipeline")
+
+# Routes are defined on this router, then mounted twice below - once
+# unprefixed (for local dev, where PIPELINE_URL is a bare
+# http://localhost:8001 with no path) and once under /pyapi (for
+# production, where server and pipeline deploy together as one Vercel
+# project - see the root vercel.json - and Vercel forwards the FULL
+# incoming path, including the /pyapi prefix, to this function rather
+# than stripping it). Same handlers, reachable both ways.
+router = APIRouter()
 
 
 class ThreadHistoryEntry(BaseModel):
@@ -76,7 +85,7 @@ class GenerateResponse(BaseModel):
     analysis: dict
 
 
-@app.post("/generate", response_model=GenerateResponse)
+@router.post("/generate", response_model=GenerateResponse)
 def generate(payload: GenerateRequest):
     """Generate a draft reply for a customer message, right now, on demand."""
     require_openai_key()
@@ -101,13 +110,13 @@ class SystemPromptPayload(BaseModel):
     content: str
 
 
-@app.get("/system-prompt")
+@router.get("/system-prompt")
 def get_system_prompt():
     """Return the system prompt exactly as it is used for the next generation."""
     return {"content": load_system_prompt()}
 
 
-@app.put("/system-prompt")
+@router.put("/system-prompt")
 def update_system_prompt(payload: SystemPromptPayload):
     """
     Save the edit as a new version in MongoDB. Because draft_generator.py
@@ -119,6 +128,11 @@ def update_system_prompt(payload: SystemPromptPayload):
     return {"status": "saved", "version": version}
 
 
-@app.get("/health")
+@router.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# Mounted twice - see the comment above router's definition.
+app.include_router(router)
+app.include_router(router, prefix="/pyapi")
