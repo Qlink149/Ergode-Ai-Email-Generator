@@ -15,8 +15,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from openai import OpenAI
 
-from config import OPENAI_API_KEY, SYSTEM_PROMPT_PATH, require_openai_key
-from draft_generator import generate_draft, load_system_prompt
+from config import OPENAI_API_KEY, require_openai_key
+from draft_generator import generate_draft, load_system_prompt, save_system_prompt
 from analysis import analyze_message
 
 app = FastAPI(title="Ergode AI Pipeline")
@@ -28,7 +28,10 @@ class ThreadHistoryEntry(BaseModel):
 
 
 class OrderFacts(BaseModel):
-    """Customer-safe fields only - see server/services/disclosureClassifier.js."""
+    """
+    Customer-safe fields, plus one reasoning-only field. See
+    server/services/disclosureClassifier.js.
+    """
 
     recipient_name: str | None = None
     product_name: str | None = None
@@ -38,6 +41,9 @@ class OrderFacts(BaseModel):
     shipped_date: str | None = None
     purchase_date: str | None = None
     customer_tracking_status: str | None = None
+    # Plain-English order status (e.g. "Cancelled") for the AI's reasoning
+    # only - draft_generator.py is responsible for keeping it out of output.
+    internal_status_note: str | None = None
 
 
 class GenerateRequest(BaseModel):
@@ -91,12 +97,13 @@ def get_system_prompt():
 @app.put("/system-prompt")
 def update_system_prompt(payload: SystemPromptPayload):
     """
-    Overwrite the system prompt file. Because draft_generator.py reads this
-    file fresh on every call, this takes effect on the very next /generate
-    request - no restart needed.
+    Save the edit as a new version in MongoDB. Because draft_generator.py
+    reads the latest version fresh on every call, this takes effect on the
+    very next /generate request - no restart needed. Every past version
+    stays in the database.
     """
-    SYSTEM_PROMPT_PATH.write_text(payload.content, encoding="utf-8")
-    return {"status": "saved"}
+    version = save_system_prompt(payload.content)
+    return {"status": "saved", "version": version}
 
 
 @app.get("/health")

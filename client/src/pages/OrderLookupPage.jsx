@@ -123,7 +123,10 @@ export default function OrderLookupPage() {
         orderId: lookup.order_id,
         threadHistory,
         language,
-        orderFacts: lookup.order.customer_safe,
+        orderFacts: {
+          ...lookup.order.customer_safe,
+          internal_status_note: lookup.order.reasoning_status,
+        },
       });
       setResult({ ...response, realReply });
     } catch (err) {

@@ -4,26 +4,55 @@ draft_generator.py
 Sends a context package (the "briefing note" built by context_builder.py)
 to OpenAI and gets back a draft reply, written in Ergode's voice.
 
-The system prompt (tone, templates, rules) is read fresh from
-docs/ergode_email_system_prompt.md on every call, not cached - so editing it
-from the System Prompt page in the UI takes effect on the very next
-generation, with no restart needed. Only the facts specific to one reply -
-the customer's message, the thread history, the order id - go into the user
+The system prompt (tone, templates, rules) is read fresh from MongoDB's
+"system_prompts" collection on every call, not cached - so editing it from
+the System Prompt page in the UI takes effect on the very next generation,
+with no restart needed. Only the facts specific to one reply - the
+customer's message, the thread history, the order id - go into the user
 turn. That split is deliberate: it is exactly what a production system
 does, and it is why swapping in real order/CRM data later only changes
 format_user_prompt(), not this file's structure.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from openai import OpenAI
 
-from config import OPENAI_API_KEY, OPENAI_MODEL, SYSTEM_PROMPT_PATH, require_openai_key
+from config import OPENAI_API_KEY, OPENAI_MODEL, SYSTEM_PROMPT_SEED_PATH, require_openai_key
+from db import get_db
 
 
 def load_system_prompt() -> str:
-    """Read the system prompt from disk fresh every time - see module docstring."""
-    return SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
+    """
+    Read the current system prompt, fresh every call - see module docstring.
+
+    The first time the "system_prompts" collection is empty (a fresh
+    database), this seeds it from docs/ergode_email_system_prompt.md as
+    version 1, so a new deployment boots with the real prompt instead of
+    an error.
+    """
+    collection = get_db()["system_prompts"]
+    latest = collection.find_one({}, sort=[("version", -1)])
+
+    if latest is None:
+        seed_content = SYSTEM_PROMPT_SEED_PATH.read_text(encoding="utf-8")
+        collection.insert_one(
+            {"version": 1, "content": seed_content, "updated_at": datetime.now(timezone.utc)}
+        )
+        return seed_content
+
+    return latest["content"]
+
+
+def save_system_prompt(content: str) -> int:
+    """Save an edit as a new version - every past version is kept, none overwritten."""
+    collection = get_db()["system_prompts"]
+    latest = collection.find_one({}, sort=[("version", -1)])
+    next_version = (latest["version"] + 1) if latest else 1
+    collection.insert_one(
+        {"version": next_version, "content": content, "updated_at": datetime.now(timezone.utc)}
+    )
+    return next_version
 
 
 def _days_since(date_string: str | None) -> int | None:
@@ -49,6 +78,13 @@ def format_order_facts(order_facts: dict) -> list[str]:
     """
     lines = ["\nVerified order/shipment facts (safe to state to the customer):"]
 
+    # A Cancelled/Refunded order fully explains why nothing shipped or
+    # scanned - checked first so the "no scan yet, escalate" wording below
+    # never fires for a settled order and ends up competing with (and
+    # outweighing) the reasoning-only status note further down.
+    status_note = order_facts.get("internal_status_note")
+    order_is_settled = status_note in ("Cancelled", "Refunded")
+
     if order_facts.get("recipient_name"):
         lines.append(f"- Customer's name: {order_facts['recipient_name']} (use this in the salutation)")
     if order_facts.get("product_name"):
@@ -65,6 +101,12 @@ def format_order_facts(order_facts: dict) -> list[str]:
     status = order_facts.get("customer_tracking_status")
     if status:
         lines.append(f"- Latest carrier status: \"{status}\"")
+    elif order_is_settled:
+        lines.append(
+            "- Latest carrier status: none on file. This is expected, not a "
+            "concern - see the internal order status note below, which "
+            "already explains why."
+        )
     else:
         lines.append(
             "- Latest carrier status: none on file - a shipping label/number "
@@ -73,6 +115,25 @@ def format_order_facts(order_facts: dict) -> list[str]:
             "normal in-transit delay - do not tell the customer to simply "
             "wait longer for tracking to update."
         )
+
+    if status_note:
+        if order_is_settled:
+            lines.append(
+                f"\nInternal order status (for your reasoning ONLY - never state "
+                f"this code, label, or word to the customer): {status_note}. "
+                f"This is the order's actual, current, final state - it "
+                f"overrides every shipping/tracking fact above, including a "
+                f"shipped_date (shipping labels are sometimes generated before "
+                f"a cancellation lands). Do NOT describe this order as needing "
+                f"fulfilment, escalation, or an apology for delay - write the "
+                f"reply confirming the {status_note.lower()} outcome instead, "
+                f"in the tone the system prompt already uses for that."
+            )
+        else:
+            lines.append(
+                f"\nInternal order status (for your reasoning ONLY - never state "
+                f"this code, label, or word to the customer): {status_note}."
+            )
 
     return lines
 

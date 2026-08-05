@@ -1,17 +1,23 @@
 /**
  * server.js
  * ---------
- * A small Express server with one job: read the report JSON that the
- * Python pipeline produces (data/reports/full_report.json) and serve it
- * to the React viewer over HTTP.
+ * The Express app - all API routes mount here.
+ *
+ * Runs two ways:
+ *   - Locally: `node server.js` starts a normal persistent server on
+ *     SERVER_PORT (see the app.listen() guard at the bottom).
+ *   - On Vercel: this file is deployed as a serverless function (see
+ *     vercel.json). Vercel imports `module.exports = app` and calls it
+ *     per-request - app.listen() never runs there, Vercel's runtime
+ *     handles the actual listening.
  *
  * This file only wires things up. The actual route logic lives in
- * routes/reports.js. As the project grows past this comparison-report
- * phase, new features get their own route file and get mounted here the
- * same way - this file itself should stay small.
+ * routes/*.js - new features get their own route file and mount here
+ * the same way, so this file stays small.
  */
 
-require("dotenv").config({ path: "../.env" });
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 const express = require("express");
 const cors = require("cors");
 const reportsRouter = require("./routes/reports");
@@ -35,6 +41,12 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-app.listen(port, () => {
-  console.log(`Report server running at http://localhost:${port}`);
-});
+// Only bind a real port locally - on Vercel, app.listen() must not run;
+// the platform invokes `app` directly as the request handler instead.
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`Report server running at http://localhost:${port}`);
+  });
+}
+
+module.exports = app;

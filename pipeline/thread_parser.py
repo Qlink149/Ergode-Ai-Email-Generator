@@ -14,17 +14,17 @@ messages in order, each with the boilerplate stripped and the useful bits
 (order id, the customer's actual words, whether this is a marketplace
 representative relaying on the customer's behalf) pulled out.
 
-Run this file directly to parse the whole zip once and cache the result as
-JSON files under data/parsed_threads/, so later steps don't need to touch the
-zip again.
+Run this file directly to parse the whole zip once and cache the result in
+the "parsed_threads" MongoDB collection, so later steps don't need to touch
+the zip again.
 """
 
-import json
 import re
 import zipfile
 from pathlib import Path
 
-from config import ZIP_PATH, PARSED_THREADS_DIR
+from config import ZIP_PATH
+from db import get_db
 
 # Matches filenames like "1_message_in_873211.txt" -> seq=1, direction="in"
 FILENAME_PATTERN = re.compile(r"^(\d+)_message_(in|out)_\d+\.txt$")
@@ -271,18 +271,24 @@ def parse_zip(zip_path: Path = ZIP_PATH) -> dict[str, list[dict]]:
 
 
 def save_parsed_threads(threads: dict[str, list[dict]]) -> None:
-    """Write one JSON file per thread so later steps can skip re-reading the zip."""
+    """
+    Write every thread into the "parsed_threads" MongoDB collection, one
+    document per thread. Upserts by thread_id so re-parsing updates
+    existing threads instead of duplicating them.
+    """
+    collection = get_db()["parsed_threads"]
     for thread_id, messages in threads.items():
-        out_path = PARSED_THREADS_DIR / f"{thread_id}.json"
-        out_path.write_text(json.dumps(messages, indent=2, ensure_ascii=False), encoding="utf-8")
+        collection.replace_one(
+            {"thread_id": thread_id},
+            {"thread_id": thread_id, "messages": messages},
+            upsert=True,
+        )
 
 
 def load_parsed_threads() -> dict[str, list[dict]]:
-    """Read back the cached JSON files produced by save_parsed_threads()."""
-    threads = {}
-    for file_path in PARSED_THREADS_DIR.glob("*.json"):
-        threads[file_path.stem] = json.loads(file_path.read_text(encoding="utf-8"))
-    return threads
+    """Read back the threads saved by save_parsed_threads()."""
+    collection = get_db()["parsed_threads"]
+    return {doc["thread_id"]: doc["messages"] for doc in collection.find({})}
 
 
 if __name__ == "__main__":
@@ -290,4 +296,4 @@ if __name__ == "__main__":
     save_parsed_threads(parsed)
     total_messages = sum(len(m) for m in parsed.values())
     print(f"Parsed {len(parsed)} threads, {total_messages} messages.")
-    print(f"Saved to {PARSED_THREADS_DIR}")
+    print("Saved to MongoDB (parsed_threads collection).")

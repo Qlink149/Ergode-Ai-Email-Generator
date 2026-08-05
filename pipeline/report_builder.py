@@ -2,16 +2,17 @@
 report_builder.py
 ------------------
 Takes the raw list of per-case results produced by run_pipeline.py and
-turns it into one report file: a summary scorecard plus every individual
-case, ready for the Express server to hand to the React viewer.
+turns it into one report: a summary scorecard plus every individual case.
+
+Saved as its own document in the "pipeline_runs" MongoDB collection -
+write-once, never overwritten, so every run stays available as an audit
+trail instead of replacing the previous one (which is what a single
+report file used to do, silently, every time the pipeline ran).
 """
 
-import json
 from datetime import datetime, timezone
 
-from config import REPORTS_DIR
-
-REPORT_PATH = REPORTS_DIR / "full_report.json"
+from db import get_db
 
 
 def _fact_fully_matched(fact_diff: dict) -> bool:
@@ -47,10 +48,14 @@ def build_report(cases: list[dict]) -> dict:
 
 
 def save_report(report: dict) -> None:
-    REPORT_PATH.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+    """Insert this run as a new document - every run is kept, none overwritten."""
+    get_db()["pipeline_runs"].insert_one(dict(report))
 
 
 def load_report() -> dict:
-    if not REPORT_PATH.exists():
+    """Return the most recent run, or an empty report if none exist yet."""
+    latest = get_db()["pipeline_runs"].find_one({}, sort=[("generated_at", -1)])
+    if not latest:
         return {"generated_at": None, "summary": {"total_cases": 0}, "cases": []}
-    return json.loads(REPORT_PATH.read_text(encoding="utf-8"))
+    latest.pop("_id", None)
+    return latest

@@ -22,13 +22,24 @@ from config import SERVER_URL
 
 
 def fetch_order_facts(order_id: str | None) -> dict | None:
-    """Return customer-safe order facts for one order id, or None on any failure."""
+    """
+    Return order facts for one order id, or None on any failure: the
+    customer-safe fields, plus `internal_status_note` (a plain-English
+    order status, e.g. "Cancelled") for the AI's reasoning only - see
+    disclosureClassifier.js's `reasoning_status` and draft_generator.py's
+    handling of it. Never surfaced to the customer, just used so the AI
+    doesn't contradict a status it isn't shown directly.
+    """
     if not order_id:
         return None
 
     try:
         with urllib.request.urlopen(f"{SERVER_URL}/api/order-lookup/{order_id}", timeout=10) as response:
             data = json.loads(response.read())
-            return data.get("order", {}).get("customer_safe")
+            order = data.get("order", {})
+            facts = order.get("customer_safe")
+            if facts is not None:
+                facts = {**facts, "internal_status_note": order.get("reasoning_status")}
+            return facts
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
         return None

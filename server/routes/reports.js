@@ -1,30 +1,56 @@
 /**
  * routes/reports.js
  * ------------------
- * Reads the report file the Python pipeline generates and returns it.
+ * Reads pipeline run reports from the "pipeline_runs" MongoDB collection.
+ * Every run the Python pipeline does is its own document - write once,
+ * never overwritten - so past runs stay available as an audit trail
+ * instead of each run replacing the last one.
  *
- * This route is read-only - it does not generate anything itself. It
- * re-reads the file on every request so a fresh pipeline run shows up
- * immediately without restarting this server.
+ * This route is read-only - it does not generate anything itself.
  */
 
 const express = require("express");
-const fs = require("fs");
-const path = require("path");
+const { getDb } = require("../db");
 
 const router = express.Router();
 
-const REPORT_PATH = path.join(__dirname, "..", "..", "data", "reports", "full_report.json");
+/** The most recent run - what the Comparison Report tab shows by default. */
+router.get("/", async (req, res) => {
+  try {
+    const db = await getDb();
+    const latest = await db
+      .collection("pipeline_runs")
+      .find({})
+      .sort({ generated_at: -1 })
+      .limit(1)
+      .next();
 
-router.get("/", (req, res) => {
-  if (!fs.existsSync(REPORT_PATH)) {
-    return res.status(404).json({
-      error: "No report yet. Run the pipeline first: python pipeline/run_pipeline.py",
-    });
+    if (!latest) {
+      return res.status(404).json({
+        error: "No report yet. Run the pipeline first: python pipeline/run_pipeline.py",
+      });
+    }
+
+    res.json(latest);
+  } catch (err) {
+    res.status(502).json({ error: `Could not load report: ${err.message}` });
   }
+});
 
-  const raw = fs.readFileSync(REPORT_PATH, "utf-8");
-  res.json(JSON.parse(raw));
+/** Every past run's headline numbers, newest first - the audit trail. */
+router.get("/history", async (req, res) => {
+  try {
+    const db = await getDb();
+    const runs = await db
+      .collection("pipeline_runs")
+      .find({}, { projection: { cases: 0 } }) // headline numbers only, not every case
+      .sort({ generated_at: -1 })
+      .toArray();
+
+    res.json({ runs });
+  } catch (err) {
+    res.status(502).json({ error: `Could not load report history: ${err.message}` });
+  }
 });
 
 module.exports = router;

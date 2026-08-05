@@ -3,30 +3,27 @@
  * ------------------
  * The ticket queue: one row per customer thread, like a support inbox.
  *
- * Right now this reads the threads the Python pipeline parsed out of
- * categorizations.zip (data/parsed_threads/*.json) - that's the acquisition
- * source for this phase. When the real CRM Thread API goes live, only the
- * loadAllThreads() function below needs to change to call that API instead
- * of reading these files; every route and the React pages that consume
- * them stay the same.
+ * Reads from the "parsed_threads" MongoDB collection, written by the
+ * Python pipeline's thread_parser.py. That's the acquisition source for
+ * this phase. When the real CRM Thread API goes live, only
+ * loadAllThreads() below needs to change to call that API (and write
+ * results into the same collection shape) - every route and the React
+ * pages that consume them stay the same.
  */
 
 const express = require("express");
-const fs = require("fs");
-const path = require("path");
+const { getDb } = require("../db");
 
 const router = express.Router();
-const THREADS_DIR = path.join(__dirname, "..", "..", "data", "parsed_threads");
 
-/** Read every parsed thread file. Swap this out for a live API call later. */
-function loadAllThreads() {
-  if (!fs.existsSync(THREADS_DIR)) return {};
+/** Read every parsed thread from MongoDB. Swap this out for a live API call later. */
+async function loadAllThreads() {
+  const db = await getDb();
+  const docs = await db.collection("parsed_threads").find({}).toArray();
 
   const threads = {};
-  for (const file of fs.readdirSync(THREADS_DIR)) {
-    if (!file.endsWith(".json")) continue;
-    const threadId = file.replace(".json", "");
-    threads[threadId] = JSON.parse(fs.readFileSync(path.join(THREADS_DIR, file), "utf-8"));
+  for (const doc of docs) {
+    threads[doc.thread_id] = doc.messages;
   }
   return threads;
 }
@@ -48,25 +45,33 @@ function summarize(threadId, messages) {
   };
 }
 
-router.get("/", (req, res) => {
-  const threads = loadAllThreads();
-  const rows = Object.entries(threads).map(([id, messages]) => summarize(id, messages));
+router.get("/", async (req, res) => {
+  try {
+    const threads = await loadAllThreads();
+    const rows = Object.entries(threads).map(([id, messages]) => summarize(id, messages));
 
-  // Threads waiting on a reply surface first - that's the actual queue.
-  rows.sort((a, b) => (a.status === b.status ? 0 : a.status === "awaiting_reply" ? -1 : 1));
+    // Threads waiting on a reply surface first - that's the actual queue.
+    rows.sort((a, b) => (a.status === b.status ? 0 : a.status === "awaiting_reply" ? -1 : 1));
 
-  res.json({ tickets: rows });
+    res.json({ tickets: rows });
+  } catch (err) {
+    res.status(502).json({ error: `Could not load tickets: ${err.message}` });
+  }
 });
 
-router.get("/:threadId", (req, res) => {
-  const threads = loadAllThreads();
-  const messages = threads[req.params.threadId];
+router.get("/:threadId", async (req, res) => {
+  try {
+    const db = await getDb();
+    const doc = await db.collection("parsed_threads").findOne({ thread_id: req.params.threadId });
 
-  if (!messages) {
-    return res.status(404).json({ error: `No thread found with id ${req.params.threadId}` });
+    if (!doc) {
+      return res.status(404).json({ error: `No thread found with id ${req.params.threadId}` });
+    }
+
+    res.json({ thread_id: req.params.threadId, messages: doc.messages });
+  } catch (err) {
+    res.status(502).json({ error: `Could not load thread: ${err.message}` });
   }
-
-  res.json({ thread_id: req.params.threadId, messages });
 });
 
 module.exports = router;

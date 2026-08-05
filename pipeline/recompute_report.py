@@ -9,13 +9,13 @@ fix doesn't cost another full batch of API calls to verify.
 """
 
 from comparison import compare_pair
-from report_builder import build_report, save_report, load_report, REPORT_PATH
+from report_builder import build_report, save_report, load_report
 
 
 def recompute() -> None:
     report = load_report()
     if not report["cases"]:
-        print(f"No existing report at {REPORT_PATH} - nothing to recompute.")
+        print("No existing report in MongoDB - nothing to recompute.")
         return
 
     for case in report["cases"]:

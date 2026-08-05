@@ -14,7 +14,33 @@
  * rawOrder.seller_info or the extraDetails.auxhold_* fields into the
  * returned object. There is no "strip" step to forget - those fields
  * simply never enter the object that gets sent to the browser or the AI.
+ *
+ * One INTERNAL field is deliberately surfaced separately, as
+ * `reasoning_status`: the plain-English order status. The original design
+ * says INTERNAL fields may be used for the AI's reasoning, just never
+ * echoed into customer-facing text - e.g. a cancelled order can still show
+ * a shipped_date (the label was generated before the cancellation landed),
+ * and without knowing the order was actually cancelled, the AI has no way
+ * to avoid confidently telling a customer their already-cancelled order
+ * "has already shipped and can't be cancelled." draft_generator.py is
+ * responsible for keeping this out of the actual output text.
  */
+
+const ORDER_STATUS_LABELS = {
+  N: "New, not yet processed",
+  HLD: "On hold",
+  HAM: "On hold - attention management",
+  HEC: "On hold - extra charge or payment pending",
+  HPC: "On hold - potential cheat flag",
+  PD: "Processed - shipped direct by the supplier",
+  PA: "Processed - routed via our warehouse",
+  SHPFW: "Shipped from warehouse",
+  H: "Closed / archived",
+  C: "Cancelled",
+  RF: "Refunded",
+  REP: "Replacement issued",
+  REPF: "Replacement follow-up",
+};
 
 function classifyOrder(rawOrder) {
   const firstSku = Object.keys(rawOrder.product_details || {})[0];
@@ -45,6 +71,9 @@ function classifyOrder(rawOrder) {
       action: extra.action || null,
       cancel_order: lineItem.cancel_order || null,
     },
+    // For the AI's reasoning only - see the module docstring. Not part of
+    // customer_safe, so nothing downstream mistakes it for sayable text.
+    reasoning_status: ORDER_STATUS_LABELS[lineItem.order_status] || null,
   };
 }
 

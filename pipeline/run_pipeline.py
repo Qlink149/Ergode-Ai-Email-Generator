@@ -93,7 +93,7 @@ def run() -> None:
 
     print("\nDone.")
     print(f"Summary: {report['summary']}")
-    print(f"Full report saved to {report_builder.REPORT_PATH}")
+    print("Saved to MongoDB (pipeline_runs collection).")
 
 
 if __name__ == "__main__":
