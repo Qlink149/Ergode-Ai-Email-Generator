@@ -29,7 +29,16 @@ const orderLookupRouter = require("./routes/orderLookup");
 const app = express();
 const port = process.env.SERVER_PORT || 4000;
 
-app.use(cors());
+// CORS_ORIGIN is a comma-separated allowlist (e.g. the frontend's Vercel
+// domain, plus a custom domain if it has one). Unset locally, which falls
+// back to wide-open - fine for local dev, not for production, which is
+// exactly why this is required in production instead of hardcoded.
+const allowedOrigins = (process.env.CORS_ORIGIN || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({ origin: allowedOrigins.length > 0 ? allowedOrigins : "*" }));
 app.use(express.json());
 app.use("/api/reports", reportsRouter);
 app.use("/api/generate", generateRouter);
