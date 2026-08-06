@@ -31,6 +31,7 @@ from openai import OpenAI
 from config import OPENAI_API_KEY, require_openai_key
 from draft_generator import generate_draft, load_system_prompt, save_system_prompt
 from analysis import analyze_message
+from draft_store import save_draft
 
 app = FastAPI(title="Ergode AI Pipeline")
 
@@ -78,6 +79,10 @@ class GenerateRequest(BaseModel):
     thread_history: List[ThreadHistoryEntry] = []
     language: Optional[str] = None  # e.g. "Spanish" - overrides auto-detection when set
     order_facts: Optional[OrderFacts] = None  # real, verified data from the Order API
+    # Set by the ticketing page only, so this generation gets written back
+    # to ai_drafts against the thread it belongs to - see draft_store.py.
+    thread_id: Optional[str] = None
+    seq: Optional[str] = None  # a message seq (as a string) or "latest"
 
 
 class GenerateResponse(BaseModel):
@@ -102,6 +107,9 @@ def generate(payload: GenerateRequest):
 
     draft = generate_draft(context, client=client)
     analysis = analyze_message(payload.customer_message, draft, client=client)
+
+    if payload.thread_id:
+        save_draft(payload.thread_id, payload.seq, context, draft, analysis)
 
     return {"draft_reply": draft, "analysis": analysis}
 

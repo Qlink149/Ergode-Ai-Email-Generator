@@ -126,9 +126,13 @@ def format_order_facts(order_facts: dict) -> List[str]:
                 f"overrides every shipping/tracking fact above, including a "
                 f"shipped_date (shipping labels are sometimes generated before "
                 f"a cancellation lands). Do NOT describe this order as needing "
-                f"fulfilment, escalation, or an apology for delay - write the "
-                f"reply confirming the {status_note.lower()} outcome instead, "
-                f"in the tone the system prompt already uses for that."
+                f"fulfilment or escalation, or apologize for a shipping delay - "
+                f"that would contradict the order's real state. This is a fact "
+                f"to reason with, not a topic to write about by default: "
+                f"respond to what the customer actually asked, and only bring "
+                f"this status in where it's actually relevant to their message. "
+                f"Which template and tone to use is decided the normal way, by "
+                f"the category rules elsewhere in the system prompt."
             )
         else:
             lines.append(

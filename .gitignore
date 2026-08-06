@@ -17,3 +17,6 @@ dist/
 # and real historical customer data - never commit, kept local only.
 *.pdf
 categorizations.zip
+
+# Architecture diagrams - local reference only, not part of the repo
+*.drawio

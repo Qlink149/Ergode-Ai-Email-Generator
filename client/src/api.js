@@ -39,6 +39,8 @@ export async function generateDraft({
   threadHistory,
   language,
   orderFacts,
+  threadId,
+  seq,
 }) {
   return handleResponse(
     await fetch(`${API_BASE}/api/generate`, {
@@ -51,6 +53,10 @@ export async function generateDraft({
         thread_history: threadHistory || [],
         language: language || null,
         order_facts: orderFacts || null,
+        // Only the ticketing page passes these, so this generation gets
+        // written back to ai_drafts against the thread it belongs to.
+        thread_id: threadId || null,
+        seq: seq != null ? String(seq) : null,
       }),
     })
   );

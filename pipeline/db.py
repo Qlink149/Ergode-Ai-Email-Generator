@@ -13,6 +13,8 @@ Collections:
                      overwritten (written by report_builder.py, read by
                      server/routes/reports.js)
   system_prompts  - versioned system prompt text (read/written by api.py)
+  ai_drafts       - one document per on-demand generation: context in,
+                     draft + analysis out (written by draft_store.py)
 """
 
 from pymongo import MongoClient

@@ -4,6 +4,7 @@ import { fetchOrderLookup, generateDraft } from "../api.js";
 import SideBySideReplies from "../components/SideBySideReplies.jsx";
 import LanguageInput from "../components/LanguageInput.jsx";
 import MessageText from "../components/MessageText.jsx";
+import { buildLatestCase } from "../threadPairing.js";
 
 /**
  * OrderLookupPage.jsx
@@ -82,31 +83,21 @@ export default function OrderLookupPage() {
 
     if (lookup.thread?.email_summary?.length) {
       const messages = normalizeThreadMessages(lookup.thread.email_summary);
-      const lastMessage = messages[messages.length - 1];
-      const hasRealReply = lastMessage.direction === "out";
-      const beforeTarget = hasRealReply ? messages.slice(0, -1) : messages;
+      const latestCase = buildLatestCase(messages);
 
-      // Find the most recent inbound message that actually has text - the
-      // live CRM API currently returns empty content for every message_in
-      // we've seen, so this often finds nothing, and manualMessage (typed
-      // in below) is used instead.
-      const lastInIndex = beforeTarget
-        .map((m, idx) => (m.direction === "in" && m.text ? idx : -1))
-        .filter((idx) => idx !== -1)
-        .pop();
-
-      if (lastInIndex !== undefined) {
-        customerMessage = beforeTarget[lastInIndex].text;
-        threadHistory = beforeTarget
-          .filter((_, idx) => idx !== lastInIndex)
-          .map((m) => ({ direction: m.direction, text: m.text }));
+      if (latestCase) {
+        customerMessage = latestCase.context.customerMessage;
+        threadHistory = latestCase.context.threadHistory;
+        realReply = latestCase.realReply;
       } else {
-        // No usable inbound text anywhere in the thread - still carry
-        // forward whatever history has real text, so the manually-typed
-        // message at least gets the right context.
-        threadHistory = beforeTarget.filter((m) => m.text);
+        // No usable inbound text anywhere in the thread (the live CRM
+        // API's empty-message-body gap - see crmThreadApiClient.js) -
+        // still carry forward whatever history has real text, so the
+        // manually-typed message below at least gets the right context.
+        threadHistory = messages
+          .filter((m) => m.text)
+          .map((m) => ({ direction: m.direction, text: m.text }));
       }
-      realReply = hasRealReply ? lastMessage.text : null;
     }
 
     // No `if (!customerMessage) return` here on purpose: when the CRM gives
