@@ -5,10 +5,11 @@ import { fetchTickets } from "../api.js";
 /**
  * TicketQueue.jsx
  * ----------------
- * The support inbox: one row per customer thread. Right now these threads
- * come from the imported zip (see server/routes/tickets.js) - in the real
- * build this same page reads from the live CRM Thread API instead, and
- * nothing here needs to change.
+ * The support inbox: one row per customer thread. Every row's product,
+ * customer name, and message preview is fetched live from the Order API +
+ * CRM Thread API (see server/routes/tickets.js) - the zip is only used
+ * server-side as the index of which order ids to show, never as the
+ * source of what's displayed.
  */
 
 function StatusPill({ status }) {
@@ -70,11 +71,16 @@ export default function TicketQueue({ onSelectTicket }) {
                   <Inbox size={16} className="shrink-0 text-[var(--muted)]" />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">
-                      Thread {ticket.thread_id}
+                      {ticket.recipient_name || `Thread ${ticket.thread_id}`}
                       {ticket.order_id && (
                         <span className="ml-2 text-xs text-[var(--muted)]">{ticket.order_id}</span>
                       )}
                     </p>
+                    {ticket.product_name && (
+                      <p className="truncate text-xs font-medium text-[var(--muted)]">
+                        {ticket.product_name}
+                      </p>
+                    )}
                     <p className="truncate text-xs text-[var(--muted)]">
                       {ticket.last_message_preview}
                     </p>

@@ -1,27 +1,11 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Sparkles } from "lucide-react";
-import { fetchTicketThread, generateDraft } from "../api.js";
-import SideBySideReplies from "../components/SideBySideReplies.jsx";
+import { ArrowLeft, Sparkles, Pencil, Check, ChevronDown, ChevronRight } from "lucide-react";
+import { fetchTicketThread, generateDraft, saveDraftEdit } from "../api.js";
 import LanguageInput from "../components/LanguageInput.jsx";
 import MessageText from "../components/MessageText.jsx";
-import { buildReplyCases, buildLatestCase } from "../threadPairing.js";
+import { buildCustomerMessageCases } from "../threadPairing.js";
 
-/**
- * TicketDetail.jsx
- * -----------------
- * The full message thread for one ticket, in order. Every "Us (agent)"
- * reply gets its own "Generate" button, right under that message - click
- * it and the AI redrafts that exact reply (using only what was known up
- * to that point, via threadPairing.js) and shows it side-by-side with
- * what was actually sent. This is the same idea as the Comparison Report
- * tab, just usable on any live ticket, at any point in its history, not
- * only the batch dataset.
- *
- * If the thread's last message is still unanswered, a separate section at
- * the bottom lets you generate the NEXT reply - the one that doesn't
- * exist yet - since there's no "Us (agent)" message to attach that button
- * to.
- */
+/** The full message thread for one ticket - every customer message gets its own "Generate reply" button. */
 
 function AnalysisPills({ analysis }) {
   return (
@@ -37,36 +21,253 @@ function AnalysisPills({ analysis }) {
   );
 }
 
+/** Shows what the AI actually received for this generation. threadMeta is reference-only, never sent to the AI - it's been unreliable in testing. */
+function AiContextPanel({ context, systemPromptVersion, threadMeta }) {
+  const [open, setOpen] = useState(false);
+  const facts = context.order_facts;
+
+  return (
+    <div className="executive-card-soft p-4 text-sm">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 text-left text-xs font-semibold uppercase tracking-wide text-[var(--muted)]"
+      >
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        Show AI context (what it read to write this)
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+              System prompt
+            </p>
+            <p className="mt-1">Version {systemPromptVersion}</p>
+          </div>
+
+          {threadMeta && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                CRM thread metadata (reference only - NOT sent to the AI)
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                <li>Thread reason: {threadMeta.thread_reason || "none"}</li>
+                <li>Cancellation marked: {String(threadMeta.cancellation_marked ?? "unknown")}</li>
+                <li>
+                  Order details:{" "}
+                  {threadMeta.order_details?.length ? JSON.stringify(threadMeta.order_details) : "none"}
+                </li>
+              </ul>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                These fields have already disagreed with what the real conversation shows on other
+                threads this session - shown for your own judgment, not used as a fact by the AI.
+              </p>
+            </div>
+          )}
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Order context
+            </p>
+            {facts ? (
+              <ul className="mt-1 space-y-0.5">
+                <li>Recipient: {facts.recipient_name || "unknown"}</li>
+                <li>Product: {facts.product_name || "unknown"}</li>
+                <li>Quantity: {facts.quantity || "unknown"}</li>
+                <li>Carrier: {facts.carrier_name || "none"}</li>
+                <li>Tracking ID: {facts.tracking_id || "none"}</li>
+                <li>Tracking URL: {facts.tracking_url || "none"}</li>
+                <li>Final-mile carrier: {facts.last_mile_carrier || "none"}</li>
+                <li>Final-mile tracking: {facts.last_mile_tracking || "none"}</li>
+                <li>Ship method: {facts.ship_method || "unknown"}</li>
+                <li>Shipped: {facts.shipped_date || "unknown"}</li>
+                <li>Purchased: {facts.purchase_date || "unknown"}</li>
+                <li>Promised delivery date: {facts.promised_delivery_date || "unknown"}</li>
+                <li>Order total: {facts.total_price ? `$${facts.total_price}` : "unknown"}</li>
+                <li>Marketplace: {facts.marketplace || "unknown"}</li>
+                <li>Latest carrier status: {facts.customer_tracking_status || "none on file"}</li>
+                <li>
+                  Confirmed refund:{" "}
+                  {facts.customer_refund_amount || facts.refund_date
+                    ? `$${facts.customer_refund_amount || "unknown amount"}${
+                        facts.refund_date ? `, issued ${facts.refund_date}` : ""
+                      }`
+                    : "none on file"}
+                </li>
+              </ul>
+            ) : (
+              <p className="mt-1">No verified order facts were provided for this generation.</p>
+            )}
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Customer message it's answering
+            </p>
+            <p className="mt-1 whitespace-pre-wrap">{context.customer_message}</p>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+              CRM history given ({context.thread_history?.length ?? 0} prior messages)
+            </p>
+            {context.thread_history?.length > 0 ? (
+              <div className="mt-1 space-y-2">
+                {context.thread_history.map((m, i) => (
+                  <p key={i}>
+                    <span className="font-semibold">{m.direction === "in" ? "Customer: " : "Us: "}</span>
+                    <span className="whitespace-pre-wrap">{m.text}</span>
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1">Nothing before this message in the thread.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The AI's draft, editable in place. "Edit" swaps to a textarea seeded
+ * with the current text; "Save" writes the edit back to ai_drafts
+ * (draft_store.py) against this exact thread/seq, alongside the AI's
+ * original draft_reply, which is never overwritten.
+ */
+function EditableDraft({ threadId, seq, draftReply }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(draftReply);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await saveDraftEdit({ threadId, seq, editedReply: text });
+      setSaved(true);
+      setEditing(false);
+    } catch {
+      // Best-effort - the edited text stays visible either way.
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="executive-card p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+          What our AI generated{saved && " (edited)"}
+        </h3>
+        {!editing && (
+          <button
+            onClick={() => {
+              setEditing(true);
+              setSaved(false);
+            }}
+            className="brand-button-ghost px-3 py-1 text-xs"
+          >
+            <Pencil size={12} />
+            Edit
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <div className="space-y-2">
+          <textarea
+            className="brand-input w-full rounded-lg px-3 py-2 text-sm leading-relaxed"
+            rows={10}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="brand-button px-4 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Check size={13} />
+            {saving ? "Saving..." : "Save edit"}
+          </button>
+        </div>
+      ) : (
+        <p className="whitespace-pre-wrap text-sm leading-relaxed">{text}</p>
+      )}
+    </div>
+  );
+}
+
+/** Strips order facts that weren't true yet as of the given message date - a reply from before a refund shouldn't see that refund. */
+function dateGateOrderFacts(facts, messageDate) {
+  if (!facts || !messageDate) return facts;
+  const asOf = new Date(messageDate);
+  const gated = { ...facts };
+
+  const shippedDate = facts.shipped_date ? new Date(facts.shipped_date) : null;
+  if (shippedDate && asOf < shippedDate) {
+    gated.carrier_name = null;
+    gated.tracking_id = null;
+    gated.tracking_url = null;
+    gated.ship_method = null;
+    gated.shipped_date = null;
+    gated.customer_tracking_status = null;
+    gated.last_mile_carrier = null;
+    gated.last_mile_tracking = null;
+  }
+
+  const refundDate = facts.refund_date ? new Date(facts.refund_date) : null;
+  if (refundDate && asOf < refundDate) {
+    gated.customer_refund_amount = null;
+    gated.refund_date = null;
+  }
+
+  return gated;
+}
+
 export default function TicketDetail({ threadId, onBack }) {
   const [messages, setMessages] = useState(null);
+  const [order, setOrder] = useState(null);
+  const [threadMeta, setThreadMeta] = useState(null);
   const [error, setError] = useState(null);
   const [language, setLanguage] = useState("");
-  // Results are keyed by seq number (or "latest" for the not-yet-answered
-  // case) so every reply's regeneration is independent of the others.
+  // Results keyed by customer message seq, so each generation is independent.
   const [results, setResults] = useState({});
   const [generatingKey, setGeneratingKey] = useState(null);
 
   useEffect(() => {
     fetchTicketThread(threadId)
-      .then((data) => setMessages(data.messages))
+      .then((data) => {
+        setMessages(data.messages);
+        setOrder(data.order || null);
+        setThreadMeta(data.thread_meta || null);
+      })
       .catch((err) => setError(err.message));
   }, [threadId]);
 
-  const replyCases = messages ? buildReplyCases(messages) : [];
-  const replyCaseBySeq = Object.fromEntries(replyCases.map((c) => [c.seq, c]));
+  const customerCases = messages ? buildCustomerMessageCases(messages) : [];
+  const caseBySeq = Object.fromEntries(customerCases.map((c) => [c.seq, c]));
 
-  const awaitingReply = messages && messages[messages.length - 1].direction === "in";
-  const latestCase = awaitingReply ? buildLatestCase(messages) : null;
-
-  async function handleGenerate(key, context) {
+  async function handleGenerate(key, context, messageDate) {
     setGeneratingKey(key);
     setError(null);
     try {
-      // Context here is drawn from the thread's own data only (the
-      // customer message, order id, and prior messages) - no live Order
-      // API call. threadId/seq get this generation written back to
-      // ai_drafts against the thread it belongs to (see draft_store.py).
-      const response = await generateDraft({ ...context, language, threadId, seq: key });
+      // No internal_status_note - proven unreliable against real threads, no longer trusted as input.
+      // Time-sensitive facts (shipping, refund) are only included if they were
+      // actually true as of this message's own date - otherwise a reply from
+      // before a later refund would see that refund as if it already happened.
+      const orderFacts = order ? dateGateOrderFacts(order.customer_safe, messageDate) : null;
+      // Only the customer's own prior messages - agent replies are excluded from history.
+      const customerOnlyHistory = context.threadHistory.filter((m) => m.direction === "in");
+      const response = await generateDraft({
+        ...context,
+        threadHistory: customerOnlyHistory,
+        orderFacts,
+        language,
+        threadId,
+        seq: key,
+      });
       setResults((prev) => ({ ...prev, [key]: response }));
     } catch (err) {
       setError(err.message);
@@ -99,9 +300,9 @@ export default function TicketDetail({ threadId, onBack }) {
         <div className="space-y-3">
           {messages.map((message) => {
             const isCustomer = message.direction === "in";
-            const replyCase = !isCustomer ? replyCaseBySeq[message.seq] : null;
-            const result = replyCase ? results[replyCase.seq] : null;
-            const isGenerating = generatingKey === replyCase?.seq;
+            const messageCase = isCustomer ? caseBySeq[message.seq] : null;
+            const result = messageCase ? results[messageCase.seq] : null;
+            const isGenerating = generatingKey === messageCase?.seq;
 
             return (
               <div key={`${message.direction}-${message.seq}`}>
@@ -110,35 +311,59 @@ export default function TicketDetail({ threadId, onBack }) {
                     <span className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
                       {isCustomer ? "Customer" : "Us (agent)"}
                     </span>
+                    {message.created_time && (
+                      <span className="text-xs text-[var(--muted)]">{message.created_time}</span>
+                    )}
                     {message.is_relay && <span className="pill pill-danger">relayed by marketplace</span>}
                     {message.order_id && <span className="pill pill-neutral">{message.order_id}</span>}
                   </div>
                   <MessageText text={message.text} />
                 </div>
 
-                {/* Regenerate button lives under each agent reply - not
-                    just the last one, so any point in the thread's
-                    history can be re-drafted and compared. */}
-                {replyCase && (
+                {messageCase && (
                   <div className="ml-4 mt-2 border-l-2 border-[rgb(var(--navy-rgb)/0.1)] pl-4">
                     <button
-                      onClick={() => handleGenerate(replyCase.seq, replyCase.context)}
+                      onClick={() => handleGenerate(messageCase.seq, messageCase.context, messageCase.messageDate)}
                       disabled={isGenerating}
                       className="brand-button-ghost px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Sparkles size={13} />
-                      {isGenerating ? "Generating..." : "What would AI have said here?"}
+                      {isGenerating
+                        ? "Generating..."
+                        : messageCase.realReplies.length > 0
+                        ? "Generate a Ai Reply"
+                        : "Generate AI reply"}
                     </button>
 
                     {result && (
                       <div className="mt-3 space-y-3">
-                        <SideBySideReplies
-                          realReply={replyCase.realReply}
-                          draftReply={result.draft_reply}
-                          realTitle="What was actually sent (CRM)"
-                          draftTitle="What our AI generated"
-                        />
+                        <div className="grid gap-4 md:grid-cols-2">
+                          {messageCase.realReplies.length > 0 && (
+                            <div className="executive-card p-5">
+                              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+                                What was actually sent (CRM)
+                              </h3>
+                              <div className="space-y-3">
+                                {messageCase.realReplies.map((text, i) => (
+                                  <p key={i} className="whitespace-pre-wrap text-sm leading-relaxed">
+                                    {text}
+                                  </p>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          <EditableDraft
+                            threadId={threadId}
+                            seq={String(messageCase.seq)}
+                            draftReply={result.draft_reply}
+                          />
+                        </div>
                         <AnalysisPills analysis={result.analysis} />
+                        <AiContextPanel
+                          context={result.context}
+                          systemPromptVersion={result.system_prompt_version}
+                          threadMeta={threadMeta}
+                        />
                       </div>
                     )}
                   </div>
@@ -146,39 +371,6 @@ export default function TicketDetail({ threadId, onBack }) {
               </div>
             );
           })}
-
-          {/* No reply exists yet for the last customer message - this is
-              the live "help me answer this" case, distinct from
-              regenerating history above. */}
-          {latestCase && (
-            <div className="executive-card space-y-3 p-5">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                This thread is awaiting a reply
-              </h3>
-              <button
-                onClick={() => handleGenerate("latest", latestCase.context)}
-                disabled={generatingKey === "latest"}
-                className="brand-button px-5 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Sparkles size={16} />
-                {generatingKey === "latest" ? "Generating..." : "Generate AI Reply"}
-              </button>
-
-              {results.latest && (
-                <div className="space-y-3">
-                  <div className="executive-card p-5">
-                    <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                      AI-drafted reply
-                    </h3>
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                      {results.latest.draft_reply}
-                    </p>
-                  </div>
-                  <AnalysisPills analysis={results.latest.analysis} />
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
     </div>

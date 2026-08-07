@@ -1,56 +1,30 @@
-/**
- * routes/tickets.js
- * ------------------
- * The ticket queue: one row per customer thread, like a support inbox.
- *
- * Reads from the "parsed_threads" MongoDB collection, written by the
- * Python pipeline's thread_parser.py. That's the acquisition source for
- * this phase. When the real CRM Thread API goes live, only
- * loadAllThreads() below needs to change to call that API (and write
- * results into the same collection shape) - every route and the React
- * pages that consume them stay the same.
- */
+/** The ticket queue - reads from "live_tickets" (synced by services/liveTicketSync.js), not fetched live per request. */
 
 const express = require("express");
 const { getDb } = require("../db");
 
 const router = express.Router();
 
-/** Read every parsed thread from MongoDB. Swap this out for a live API call later. */
-async function loadAllThreads() {
-  const db = await getDb();
-  const docs = await db.collection("parsed_threads").find({}).toArray();
-
-  const threads = {};
-  for (const doc of docs) {
-    threads[doc.thread_id] = doc.messages;
-  }
-  return threads;
-}
-
-/** Turn one thread's full message list into the summary row the queue shows. */
-function summarize(threadId, messages) {
-  const last = messages[messages.length - 1];
-  const orderId = messages.find((m) => m.order_id)?.order_id || null;
-  const hasRelay = messages.some((m) => m.is_relay);
-
-  return {
-    thread_id: threadId,
-    order_id: orderId,
-    message_count: messages.length,
-    status: last.direction === "in" ? "awaiting_reply" : "responded",
-    has_relay: hasRelay,
-    last_message_direction: last.direction,
-    last_message_preview: last.text.slice(0, 140),
-  };
-}
-
 router.get("/", async (req, res) => {
   try {
-    const threads = await loadAllThreads();
-    const rows = Object.entries(threads).map(([id, messages]) => summarize(id, messages));
+    const db = await getDb();
+    const tickets = await db.collection("live_tickets").find({}).toArray();
 
-    // Threads waiting on a reply surface first - that's the actual queue.
+    const rows = tickets.map((t) => {
+      const last = t.messages[t.messages.length - 1];
+      return {
+        thread_id: t.thread_id,
+        order_id: t.order_id,
+        product_name: t.order.customer_safe.product_name,
+        recipient_name: t.order.customer_safe.recipient_name,
+        message_count: t.messages.length,
+        status: last.direction === "in" ? "awaiting_reply" : "responded",
+        has_relay: t.messages.some((m) => m.is_relay),
+        last_message_direction: last.direction,
+        last_message_preview: (last.text || "").slice(0, 140),
+      };
+    });
+
     rows.sort((a, b) => (a.status === b.status ? 0 : a.status === "awaiting_reply" ? -1 : 1));
 
     res.json({ tickets: rows });
@@ -62,13 +36,19 @@ router.get("/", async (req, res) => {
 router.get("/:threadId", async (req, res) => {
   try {
     const db = await getDb();
-    const doc = await db.collection("parsed_threads").findOne({ thread_id: req.params.threadId });
+    const ticket = await db.collection("live_tickets").findOne({ thread_id: req.params.threadId });
 
-    if (!doc) {
-      return res.status(404).json({ error: `No thread found with id ${req.params.threadId}` });
+    if (!ticket) {
+      return res.status(404).json({ error: `No synced ticket found for thread ${req.params.threadId}` });
     }
 
-    res.json({ thread_id: req.params.threadId, messages: doc.messages });
+    res.json({
+      thread_id: ticket.thread_id,
+      order_id: ticket.order_id,
+      order: ticket.order,
+      messages: ticket.messages,
+      thread_meta: ticket.threadMeta || null,
+    });
   } catch (err) {
     res.status(502).json({ error: `Could not load thread: ${err.message}` });
   }

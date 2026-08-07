@@ -1,22 +1,7 @@
-"""
-draft_store.py
-----------------
-Persists every on-demand generation to the "ai_drafts" collection - the
-input context and the resulting draft + analysis, kept together as one
-record. This is the write side of the AI journey: generation reads its
-context from the same MongoDB the zip data lives in, and every case it
-produces gets written back into that same database, instead of only ever
-existing in the browser's memory until the page is refreshed.
-
-Write-once, like pipeline_runs - a new document per generation, nothing
-overwritten, so past drafts stay available even if the same message gets
-regenerated again later.
-
-Best-effort by design: a save failure here should never fail the
-generation the user is actually waiting on.
-"""
+"""Persists each generation (context + draft + analysis) to "ai_drafts", write-once. Best-effort - a save failure never fails the generation itself."""
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from pymongo.errors import PyMongoError
 
@@ -37,3 +22,21 @@ def save_draft(thread_id: str, seq: str, context: dict, draft_reply: str, analys
         )
     except PyMongoError:
         pass
+
+
+def save_draft_edit(thread_id: str, seq: str, edited_reply: str) -> Optional[dict]:
+    """Records a human edit on the latest generation for this thread/seq, without touching draft_reply."""
+    try:
+        collection = get_db()["ai_drafts"]
+        latest = collection.find_one(
+            {"thread_id": thread_id, "seq": seq}, sort=[("generated_at", -1)]
+        )
+        if not latest:
+            return None
+        collection.update_one(
+            {"_id": latest["_id"]},
+            {"$set": {"edited_reply": edited_reply, "edited_at": datetime.now(timezone.utc)}},
+        )
+        return {"thread_id": thread_id, "seq": seq, "edited_reply": edited_reply}
+    except PyMongoError:
+        return None

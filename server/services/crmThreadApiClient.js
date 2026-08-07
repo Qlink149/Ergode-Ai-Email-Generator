@@ -21,16 +21,37 @@
 const CRM_API_URL = process.env.CRM_API_URL;
 const API_KEY = process.env.CRM_API_KEY;
 
+// Base set plus Latin-1 Supplement accented letters (needed for French text).
 const NAMED_ENTITIES = {
   amp: "&", lt: "<", gt: ">", quot: '"', nbsp: " ",
   rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“",
+  agrave: "à", aacute: "á", acirc: "â", atilde: "ã", auml: "ä", aring: "å", aelig: "æ",
+  ccedil: "ç",
+  egrave: "è", eacute: "é", ecirc: "ê", euml: "ë",
+  igrave: "ì", iacute: "í", icirc: "î", iuml: "ï",
+  ntilde: "ñ",
+  ograve: "ò", oacute: "ó", ocirc: "ô", otilde: "õ", ouml: "ö", oslash: "ø",
+  ugrave: "ù", uacute: "ú", ucirc: "û", uuml: "ü",
+  yacute: "ý", yuml: "ÿ",
+  Agrave: "À", Aacute: "Á", Acirc: "Â", Atilde: "Ã", Auml: "Ä", Aring: "Å", AElig: "Æ",
+  Ccedil: "Ç",
+  Egrave: "È", Eacute: "É", Ecirc: "Ê", Euml: "Ë",
+  Igrave: "Ì", Iacute: "Í", Icirc: "Î", Iuml: "Ï",
+  Ntilde: "Ñ",
+  Ograve: "Ò", Oacute: "Ó", Ocirc: "Ô", Otilde: "Õ", Ouml: "Ö", Oslash: "Ø",
+  Ugrave: "Ù", Uacute: "Ú", Ucirc: "Û", Uuml: "Ü",
+  Yacute: "Ý",
+  szlig: "ß", thorn: "þ", THORN: "Þ",
 };
 
+const NAMED_ENTITY_PATTERN = Object.keys(NAMED_ENTITIES).join("|");
+
 function decodeEntitiesOnce(text) {
+  const namedRegex = new RegExp(`&(${NAMED_ENTITY_PATTERN});`, "g");
   return text
     .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
     .replace(/&#(\d+);/g, (_, num) => String.fromCodePoint(parseInt(num, 10)))
-    .replace(/&(amp|lt|gt|quot|nbsp|rsquo|lsquo|rdquo|ldquo);/g, (_, name) => NAMED_ENTITIES[name]);
+    .replace(namedRegex, (_, name) => NAMED_ENTITIES[name]);
 }
 
 /** Some messages are double-encoded ("&amp;#39;"), so decode twice. */
@@ -63,6 +84,7 @@ async function fetchThreadContext({ orderId, threadId } = {}) {
   const params = new URLSearchParams(orderId ? { order_id: orderId } : { thread_id: threadId });
   const response = await fetch(`${CRM_API_URL}?${params}`, {
     headers: { "x-api-key": API_KEY },
+    signal: AbortSignal.timeout(15000),
   });
 
   const body = await response.json();

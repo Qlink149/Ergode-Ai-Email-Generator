@@ -45,6 +45,13 @@ def load_system_prompt() -> str:
     return latest["content"]
 
 
+def get_system_prompt_version() -> int:
+    """The version number currently active - shown in the UI so a viewer can see which prompt produced a given draft."""
+    collection = get_db()["system_prompts"]
+    latest = collection.find_one({}, sort=[("version", -1)], projection={"version": 1})
+    return latest["version"] if latest else 0
+
+
 def save_system_prompt(content: str) -> int:
     """Save an edit as a new version - every past version is kept, none overwritten."""
     collection = get_db()["system_prompts"]
@@ -54,6 +61,14 @@ def save_system_prompt(content: str) -> int:
         {"version": next_version, "content": content, "updated_at": datetime.now(timezone.utc)}
     )
     return next_version
+
+
+def _fmt_money(value) -> str:
+    """The Order API returns prices with 4 decimal places (e.g. '36.1971') - round to real currency format."""
+    try:
+        return f"{float(value):.2f}"
+    except (TypeError, ValueError):
+        return str(value)
 
 
 def _days_since(date_string: Optional[str]) -> Optional[int]:
@@ -79,12 +94,13 @@ def format_order_facts(order_facts: dict) -> List[str]:
     """
     lines = ["\nVerified order/shipment facts (safe to state to the customer):"]
 
-    # A Cancelled/Refunded order fully explains why nothing shipped or
-    # scanned - checked first so the "no scan yet, escalate" wording below
-    # never fires for a settled order and ends up competing with (and
-    # outweighing) the reasoning-only status note further down.
-    status_note = order_facts.get("internal_status_note")
-    order_is_settled = status_note in ("Cancelled", "Refunded")
+    # A confirmed refund amount + date is concrete evidence, unlike a status
+    # label - checked first so the "no scan yet, escalate" wording below
+    # never fires for a settled order.
+    refund_amount = order_facts.get("customer_refund_amount")
+    refund_date = order_facts.get("refund_date")
+    status_note = order_facts.get("internal_status_note")  # deprecated, kept for old callers
+    order_is_settled = bool(refund_amount or refund_date) or status_note in ("Cancelled", "Refunded")
 
     if order_facts.get("recipient_name"):
         lines.append(f"- Customer's name: {order_facts['recipient_name']} (use this in the salutation)")
@@ -92,14 +108,33 @@ def format_order_facts(order_facts: dict) -> List[str]:
         lines.append(f"- Product: {order_facts['product_name']}")
     if order_facts.get("carrier_name") and order_facts.get("tracking_id"):
         lines.append(f"- Carrier: {order_facts['carrier_name']}, tracking #: {order_facts['tracking_id']}")
+    if order_facts.get("last_mile_carrier") and order_facts.get("last_mile_tracking"):
+        lines.append(
+            f"- Final-mile carrier: {order_facts['last_mile_carrier']}, "
+            f"tracking #: {order_facts['last_mile_tracking']}"
+        )
     if order_facts.get("tracking_url"):
         lines.append(f"- Tracking link: {order_facts['tracking_url']}")
+    if order_facts.get("ship_method"):
+        lines.append(f"- Ship method: {order_facts['ship_method']}")
     if order_facts.get("shipped_date"):
         days_shipped = _days_since(order_facts["shipped_date"])
         suffix = f" ({days_shipped} days ago)" if days_shipped is not None else ""
         lines.append(f"- Shipped date: {order_facts['shipped_date']}{suffix}")
+    if order_facts.get("promised_delivery_date"):
+        lines.append(f"- Promised delivery date: {order_facts['promised_delivery_date']}")
+    if order_facts.get("total_price"):
+        lines.append(f"- Order total: ${_fmt_money(order_facts['total_price'])}")
+    if refund_amount or refund_date:
+        lines.append(
+            f"- CONFIRMED REFUND: ${_fmt_money(refund_amount) if refund_amount else 'unknown amount'}"
+            f"{f', issued {refund_date}' if refund_date else ''}. This is "
+            f"concrete evidence, not a status label - state it directly if "
+            f"relevant to what the customer asked."
+        )
 
     status = order_facts.get("customer_tracking_status")
+    has_label = bool(order_facts.get("shipped_date") or order_facts.get("tracking_id"))
     if status:
         lines.append(f"- Latest carrier status: \"{status}\"")
     elif order_is_settled:
@@ -108,7 +143,7 @@ def format_order_facts(order_facts: dict) -> List[str]:
             "concern - see the internal order status note below, which "
             "already explains why."
         )
-    else:
+    elif has_label:
         lines.append(
             "- Latest carrier status: none on file - a shipping label/number "
             "exists but the carrier has not logged a first scan yet. Treat "
@@ -116,29 +151,31 @@ def format_order_facts(order_facts: dict) -> List[str]:
             "normal in-transit delay - do not tell the customer to simply "
             "wait longer for tracking to update."
         )
+    else:
+        lines.append(
+            "- No shipping label has been created yet and no tracking number "
+            "exists - the order has not shipped. Do not say a label \"exists\" "
+            "or that a scan is merely missing; say plainly that it hasn't "
+            "shipped yet."
+        )
 
+    if order_is_settled:
+        lines.append(
+            "\nThis order is settled (see the confirmed refund evidence above, "
+            "or the internal status note below, if present). Do NOT describe "
+            "it as needing fulfilment or escalation, or apologize for a "
+            "shipping delay - that would contradict the order's real state. "
+            "This is a fact to reason with, not a topic to write about by "
+            "default: respond to what the customer actually asked, and only "
+            "bring this in where it's actually relevant to their message. "
+            "Template and tone are still decided the normal way, by the "
+            "category rules elsewhere in the system prompt."
+        )
     if status_note:
-        if order_is_settled:
-            lines.append(
-                f"\nInternal order status (for your reasoning ONLY - never state "
-                f"this code, label, or word to the customer): {status_note}. "
-                f"This is the order's actual, current, final state - it "
-                f"overrides every shipping/tracking fact above, including a "
-                f"shipped_date (shipping labels are sometimes generated before "
-                f"a cancellation lands). Do NOT describe this order as needing "
-                f"fulfilment or escalation, or apologize for a shipping delay - "
-                f"that would contradict the order's real state. This is a fact "
-                f"to reason with, not a topic to write about by default: "
-                f"respond to what the customer actually asked, and only bring "
-                f"this status in where it's actually relevant to their message. "
-                f"Which template and tone to use is decided the normal way, by "
-                f"the category rules elsewhere in the system prompt."
-            )
-        else:
-            lines.append(
-                f"\nInternal order status (for your reasoning ONLY - never state "
-                f"this code, label, or word to the customer): {status_note}."
-            )
+        lines.append(
+            f"\nInternal order status (for your reasoning ONLY - never state "
+            f"this code, label, or word to the customer): {status_note}."
+        )
 
     return lines
 
@@ -242,9 +279,24 @@ def format_user_prompt(context: dict) -> str:
             f"{language}. This overrides the system prompt's default of "
             f"replying in the customer's own language - use {language} even "
             f"though the customer's message above is in a different "
-            f"language. Still add an English version below a '=====' "
-            f"divider afterward if {language} is not English."
+            f"language."
         )
+
+    lines.append(
+        "\nMANDATORY OUTPUT FORMAT: if the reply itself (the email to the "
+        "customer) is in any language other than English - whether from the "
+        "override above, or your own detection of the customer's language - "
+        "your entire response MUST follow this exact two-part shape, both "
+        "parts always present:\n"
+        "<the reply, in the customer's language>\n"
+        "=====\n"
+        "<the same reply, translated into plain English>\n"
+        "This is not optional and not just a suggestion: a human reviewer "
+        "who does not read that language must approve every draft before "
+        "it is sent, and cannot do that from a non-English reply alone. If "
+        "you write the customer-facing reply in English, skip this and "
+        "return only the reply, as normal."
+    )
 
     return "\n".join(lines)
 

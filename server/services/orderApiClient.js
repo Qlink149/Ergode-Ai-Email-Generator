@@ -39,6 +39,7 @@ async function fetchOrderDetails(orderId) {
       function_name: "fetch_order_details",
       "parameters[order_id]": orderId,
     }),
+    signal: AbortSignal.timeout(15000), // was hanging forever on some calls with no timeout
   });
 
   const data = await response.json();

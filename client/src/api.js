@@ -79,6 +79,21 @@ export async function fetchTicketThread(threadId) {
   return handleResponse(await fetch(`${API_BASE}/api/tickets/${threadId}`));
 }
 
+/** Save a human edit to a previously generated draft. */
+export async function saveDraftEdit({ threadId, seq, editedReply }) {
+  return handleResponse(
+    await fetch(`${API_BASE}/api/draft-edit`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        thread_id: threadId,
+        seq: String(seq),
+        edited_reply: editedReply,
+      }),
+    })
+  );
+}
+
 export async function saveSystemPrompt(content) {
   return handleResponse(
     await fetch(`${API_BASE}/api/system-prompt`, {

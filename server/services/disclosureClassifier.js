@@ -62,12 +62,20 @@ function classifyOrder(rawOrder) {
       purchase_date: buyer.purchase_date || null,
       marketplace: extra.marketplace_name || rawOrder.venue || null,
       customer_tracking_status: lineItem.customer_tracking_status || null,
+      ship_method: lineItem.ship_method || null,
+      promised_delivery_date: extra.promised_delivery_date || null,
+      total_price: rawOrder.total_price || null,
+      // Concrete evidence a refund actually happened, unlike order_status -
+      // an amount and a date, not a label. Prefer these over reasoning_status.
+      customer_refund_amount: lineItem.customer_refund_amount || null,
+      refund_date: lineItem.refund_date || null,
+      last_mile_carrier: extra.last_mile_carrier || null,
+      last_mile_tracking: extra.last_mile_tracking || null,
     },
     internal: {
       order_status_code: lineItem.order_status || null,
       internal_order_id: extra.internal_order_id || null,
       order_item_id: extra.order_item_id || null,
-      ship_method: lineItem.ship_method || null,
       action: extra.action || null,
       cancel_order: lineItem.cancel_order || null,
     },

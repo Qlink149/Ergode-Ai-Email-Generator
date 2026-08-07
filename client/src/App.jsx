@@ -25,6 +25,13 @@ const TABS = [
   { id: "prompt", label: "System Prompt" },
 ];
 
+const TAB_META = {
+  tickets: { title: "Ticket Queue", description: "Live customer threads, one AI-generate button per message" },
+  lookup: { title: "Order Lookup", description: "Look up a live order and generate a reply grounded in it" },
+  report: { title: "Draft Comparison Report", description: "AI draft vs. real historical reply" },
+  prompt: { title: "System Prompt", description: "The prompt every draft is generated from" },
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState("tickets");
   const [report, setReport] = useState(null);
@@ -47,8 +54,8 @@ export default function App() {
   return (
     <AppShell
       badge="Ergode AI"
-      title="Draft Comparison Report"
-      description="AI draft vs. real historical reply"
+      title={TAB_META[activeTab].title}
+      description={TAB_META[activeTab].description}
     >
       <Tabs tabs={TABS} activeTab={activeTab} onChange={handleTabChange} />
 

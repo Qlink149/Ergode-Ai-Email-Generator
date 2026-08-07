@@ -29,9 +29,9 @@ from pydantic import BaseModel
 from openai import OpenAI
 
 from config import OPENAI_API_KEY, require_openai_key
-from draft_generator import generate_draft, load_system_prompt, save_system_prompt
+from draft_generator import generate_draft, load_system_prompt, save_system_prompt, get_system_prompt_version
 from analysis import analyze_message
-from draft_store import save_draft
+from draft_store import save_draft, save_draft_edit
 
 app = FastAPI(title="Ergode AI Pipeline")
 
@@ -51,10 +51,7 @@ class ThreadHistoryEntry(BaseModel):
 
 
 class OrderFacts(BaseModel):
-    """
-    Customer-safe fields, plus one reasoning-only field. See
-    server/services/disclosureClassifier.js.
-    """
+    """Customer-safe fields. See server/services/disclosureClassifier.js."""
 
     recipient_name: Optional[str] = None
     product_name: Optional[str] = None
@@ -64,8 +61,15 @@ class OrderFacts(BaseModel):
     shipped_date: Optional[str] = None
     purchase_date: Optional[str] = None
     customer_tracking_status: Optional[str] = None
-    # Plain-English order status (e.g. "Cancelled") for the AI's reasoning
-    # only - draft_generator.py is responsible for keeping it out of output.
+    ship_method: Optional[str] = None
+    promised_delivery_date: Optional[str] = None
+    total_price: Optional[str] = None
+    customer_refund_amount: Optional[str] = None
+    refund_date: Optional[str] = None
+    last_mile_carrier: Optional[str] = None
+    last_mile_tracking: Optional[str] = None
+    # Deprecated: proven unreliable against real threads, no longer sent by
+    # the client, kept only so old callers don't hard-fail.
     internal_status_note: Optional[str] = None
 
 
@@ -79,15 +83,15 @@ class GenerateRequest(BaseModel):
     thread_history: List[ThreadHistoryEntry] = []
     language: Optional[str] = None  # e.g. "Spanish" - overrides auto-detection when set
     order_facts: Optional[OrderFacts] = None  # real, verified data from the Order API
-    # Set by the ticketing page only, so this generation gets written back
-    # to ai_drafts against the thread it belongs to - see draft_store.py.
-    thread_id: Optional[str] = None
+    thread_id: Optional[str] = None  # if set, this generation is saved to ai_drafts
     seq: Optional[str] = None  # a message seq (as a string) or "latest"
 
 
 class GenerateResponse(BaseModel):
     draft_reply: str
     analysis: dict
+    context: dict  # what the model actually saw, for the UI's "AI context" panel
+    system_prompt_version: int
 
 
 @router.post("/generate", response_model=GenerateResponse)
@@ -111,7 +115,12 @@ def generate(payload: GenerateRequest):
     if payload.thread_id:
         save_draft(payload.thread_id, payload.seq, context, draft, analysis)
 
-    return {"draft_reply": draft, "analysis": analysis}
+    return {
+        "draft_reply": draft,
+        "analysis": analysis,
+        "context": context,
+        "system_prompt_version": get_system_prompt_version(),
+    }
 
 
 class SystemPromptPayload(BaseModel):
@@ -134,6 +143,21 @@ def update_system_prompt(payload: SystemPromptPayload):
     """
     version = save_system_prompt(payload.content)
     return {"status": "saved", "version": version}
+
+
+class DraftEditPayload(BaseModel):
+    thread_id: str
+    seq: str
+    edited_reply: str
+
+
+@router.put("/draft-edit")
+def edit_draft(payload: DraftEditPayload):
+    """Saves a human edit to a draft - the original draft_reply is left untouched."""
+    result = save_draft_edit(payload.thread_id, payload.seq, payload.edited_reply)
+    if result is None:
+        return {"status": "not_found"}
+    return {"status": "saved", **result}
 
 
 @router.get("/health")

@@ -25,6 +25,7 @@ const generateRouter = require("./routes/generate");
 const systemPromptRouter = require("./routes/systemPrompt");
 const ticketsRouter = require("./routes/tickets");
 const orderLookupRouter = require("./routes/orderLookup");
+const draftEditRouter = require("./routes/draftEdit");
 
 const app = express();
 const port = process.env.SERVER_PORT || 4000;
@@ -45,6 +46,7 @@ app.use("/api/generate", generateRouter);
 app.use("/api/system-prompt", systemPromptRouter);
 app.use("/api/tickets", ticketsRouter);
 app.use("/api/order-lookup", orderLookupRouter);
+app.use("/api/draft-edit", draftEditRouter);
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
