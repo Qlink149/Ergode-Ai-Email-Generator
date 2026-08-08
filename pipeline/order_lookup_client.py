@@ -14,10 +14,9 @@ without order_facts, exactly like before this existed. It never fails
 the whole batch over a single lookup miss.
 """
 
-import json
-import urllib.error
-import urllib.request
 from typing import Optional
+
+import requests
 
 from auth_token import compute_token
 from config import SERVER_URL
@@ -37,19 +36,25 @@ def fetch_order_facts(order_id: Optional[str]) -> Optional[dict]:
     disclosureClassifier.js's `reasoning_status` and draft_generator.py's
     handling of it. Never surfaced to the customer, just used so the AI
     doesn't contradict a status it isn't shown directly.
+
+    Uses requests rather than urllib - urllib.request.urlopen() also
+    accepts file:// URLs, which static analysis (Semgrep's security-audit
+    ruleset) flags whenever the URL is built from a dynamic value, as it
+    is here (order_id). requests only ever does HTTP(S), so that class of
+    risk doesn't apply regardless of what order_id contains.
     """
     if not order_id:
         return None
 
     try:
         headers = {"Authorization": f"Bearer {_AUTH_TOKEN}"} if _AUTH_TOKEN else {}
-        request = urllib.request.Request(f"{SERVER_URL}/api/order-lookup/{order_id}", headers=headers)
-        with urllib.request.urlopen(request, timeout=10) as response:
-            data = json.loads(response.read())
-            order = data.get("order", {})
-            facts = order.get("customer_safe")
-            if facts is not None:
-                facts = {**facts, "internal_status_note": order.get("reasoning_status")}
-            return facts
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError):
+        response = requests.get(f"{SERVER_URL}/api/order-lookup/{order_id}", headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        order = data.get("order", {})
+        facts = order.get("customer_safe")
+        if facts is not None:
+            facts = {**facts, "internal_status_note": order.get("reasoning_status")}
+        return facts
+    except (requests.RequestException, ValueError):
         return None
