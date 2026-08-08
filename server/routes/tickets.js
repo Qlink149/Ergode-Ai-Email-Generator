@@ -2,6 +2,7 @@
 
 const express = require("express");
 const { getDb } = require("../db");
+const { readRawMessages } = require("../services/rawEmailReader");
 
 const router = express.Router();
 
@@ -51,6 +52,16 @@ router.get("/:threadId", async (req, res) => {
     });
   } catch (err) {
     res.status(502).json({ error: `Could not load thread: ${err.message}` });
+  }
+});
+
+/** The original raw Amazon-branded email HTML for this thread, if we have it on disk - display only. */
+router.get("/:threadId/raw-messages", (req, res) => {
+  try {
+    const messages = readRawMessages(req.params.threadId);
+    res.json({ found: messages !== null, messages: messages || [] });
+  } catch (err) {
+    res.status(500).json({ error: `Could not read raw email files: ${err.message}` });
   }
 });
 

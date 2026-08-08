@@ -7,7 +7,8 @@ import TicketQueue from "./pages/TicketQueue.jsx";
 import TicketDetail from "./pages/TicketDetail.jsx";
 import SystemPromptPage from "./pages/SystemPromptPage.jsx";
 import OrderLookupPage from "./pages/OrderLookupPage.jsx";
-import { fetchReport } from "./api.js";
+import LoginPage from "./pages/LoginPage.jsx";
+import { fetchReport, getToken, clearToken } from "./api.js";
 
 /**
  * App.jsx
@@ -33,6 +34,7 @@ const TAB_META = {
 };
 
 export default function App() {
+  const [authed, setAuthed] = useState(Boolean(getToken()));
   const [activeTab, setActiveTab] = useState("tickets");
   const [report, setReport] = useState(null);
   const [reportError, setReportError] = useState(null);
@@ -40,10 +42,19 @@ export default function App() {
   const [selectedTicketId, setSelectedTicketId] = useState(null);
 
   useEffect(() => {
+    function handleAuthExpired() {
+      setAuthed(false);
+    }
+    window.addEventListener("ergode-auth-expired", handleAuthExpired);
+    return () => window.removeEventListener("ergode-auth-expired", handleAuthExpired);
+  }, []);
+
+  useEffect(() => {
+    if (!authed) return;
     fetchReport()
       .then(setReport)
       .catch((err) => setReportError(err.message));
-  }, []);
+  }, [authed]);
 
   function handleTabChange(tabId) {
     setActiveTab(tabId);
@@ -51,11 +62,21 @@ export default function App() {
     setSelectedTicketId(null);
   }
 
+  function handleLogout() {
+    clearToken();
+    setAuthed(false);
+  }
+
+  if (!authed) {
+    return <LoginPage onLogin={() => setAuthed(true)} />;
+  }
+
   return (
     <AppShell
       badge="Ergode AI"
       title={TAB_META[activeTab].title}
       description={TAB_META[activeTab].description}
+      onLogout={handleLogout}
     >
       <Tabs tabs={TABS} activeTab={activeTab} onChange={handleTabChange} />
 

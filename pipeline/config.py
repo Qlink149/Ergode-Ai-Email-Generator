@@ -29,6 +29,8 @@ SERVER_PORT = int(os.getenv("SERVER_PORT", "4000"))
 SERVER_URL = os.getenv("SERVER_URL", f"http://localhost:{SERVER_PORT}")
 MONGODB_URI = os.getenv("MONGODB_URI", "")
 MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "ergode")
+APP_LOGIN_PASSWORD = os.getenv("APP_LOGIN_PASSWORD", "")
+AUTH_TOKEN_SECRET = os.getenv("AUTH_TOKEN_SECRET", "")
 
 # --- Input files ---
 ZIP_PATH = PROJECT_ROOT / "categorizations.zip"

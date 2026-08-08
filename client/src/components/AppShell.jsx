@@ -7,10 +7,18 @@
  * about any of the background/header styling.
  */
 
-export default function AppShell({ badge, title, description, children }) {
+import logo from "../logo.png";
+
+export default function AppShell({ badge, title, description, onLogout, children }) {
   return (
     <div className="executive-shell min-h-screen text-slate-900">
       <div className="exec-blob-mid" />
+      <img
+        src={logo}
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none fixed -right-[4%] -top-[8%] z-0 hidden w-[30rem] opacity-[0.07] lg:block"
+      />
 
       <header
         className="sticky top-0 z-50 backdrop-blur-xl"
@@ -39,6 +47,14 @@ export default function AppShell({ badge, title, description, children }) {
               <span className="hidden truncate text-xs text-slate-400 lg:inline">
                 · {description}
               </span>
+            )}
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="brand-button-ghost ml-auto px-3 py-1.5 text-xs"
+              >
+                Log out
+              </button>
             )}
           </div>
         </div>

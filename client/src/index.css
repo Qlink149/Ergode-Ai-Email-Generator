@@ -240,6 +240,23 @@ h6 {
   border-color: rgb(var(--violet-rgb) / 0.18);
 }
 
+.brand-input {
+  background: #ffffff;
+  border: 1px solid rgb(var(--navy-rgb) / 0.14);
+  color: var(--executive-text-strong);
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.brand-input::placeholder {
+  color: rgb(var(--muted-rgb) / 0.7);
+}
+
+.brand-input:focus {
+  border-color: rgb(var(--violet-rgb) / 0.5);
+  box-shadow: 0 0 0 3px rgb(var(--violet-rgb) / 0.12);
+}
+
 /* Pill labels used for category / match / mismatch badges */
 .pill {
   display: inline-flex;

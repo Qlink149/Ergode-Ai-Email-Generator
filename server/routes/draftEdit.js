@@ -1,6 +1,7 @@
 /** Proxies "save my edit to this draft" to the Python pipeline's /draft-edit. */
 
 const express = require("express");
+const { computeToken } = require("../services/authToken");
 
 const router = express.Router();
 const PIPELINE_URL = process.env.PIPELINE_URL || "http://localhost:8001";
@@ -9,7 +10,7 @@ router.put("/", async (req, res) => {
   try {
     const response = await fetch(`${PIPELINE_URL}/draft-edit`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${computeToken()}` },
       body: JSON.stringify(req.body),
     });
     const data = await response.json();

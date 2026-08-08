@@ -2,8 +2,9 @@
 context_builder.py
 -------------------
 Builds the "briefing note" the AI sees before it writes a reply - and
-nothing more than that. See docs/ergode_email_system_prompt.md for the
-writing rules; this file only assembles the facts.
+nothing more than that. See draft_generator.py's load_system_prompt()
+(MongoDB "system_prompts" collection) for the writing rules; this file
+only assembles the facts.
 
 For every outbound (agent) reply in a thread, we rebuild the world exactly
 as it looked right before that reply was written: the customer message it

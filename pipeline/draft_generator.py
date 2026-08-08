@@ -14,6 +14,7 @@ does, and it is why swapping in real order/CRM data later only changes
 format_user_prompt(), not this file's structure.
 """
 
+import re
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -28,9 +29,8 @@ def load_system_prompt() -> str:
     Read the current system prompt, fresh every call - see module docstring.
 
     The first time the "system_prompts" collection is empty (a fresh
-    database), this seeds it from docs/ergode_email_system_prompt.md as
-    version 1, so a new deployment boots with the real prompt instead of
-    an error.
+    database), this seeds it from system_prompt_seed.md as version 1, so
+    a new deployment boots with the real prompt instead of an error.
     """
     collection = get_db()["system_prompts"]
     latest = collection.find_one({}, sort=[("version", -1)])
@@ -301,6 +301,29 @@ def format_user_prompt(context: dict) -> str:
     return "\n".join(lines)
 
 
+def _sanitize_draft(text: str) -> str:
+    """
+    A deterministic safety net behind the "plain text, no markdown, don't
+    quote-wrap the whole reply" prompt instruction - that instruction alone
+    has been seen not holding 100% of the time, so this guarantees it
+    regardless of what the model actually did.
+    """
+    text = text.strip()
+
+    # A reply the model wrapped entirely in quotes, e.g. "Dear ...\n...\nRegards, X"
+    if len(text) > 1 and text[0] == '"' and text[-1] == '"':
+        text = text[1:-1].strip()
+
+    # **bold** -> bold (keep the words, drop the markdown)
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    # Stray leftover single/double asterisks used as markdown emphasis or bullets
+    text = re.sub(r"\*+", "", text)
+    # "# Heading" -> "Heading" at the start of a line
+    text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)
+
+    return text.strip()
+
+
 def generate_draft(context: dict, client: Optional[OpenAI] = None) -> str:
     """
     Call OpenAI with the system prompt + this case's context, return the
@@ -327,4 +350,4 @@ def generate_draft(context: dict, client: Optional[OpenAI] = None) -> str:
             raise
         response = client.chat.completions.create(model=OPENAI_MODEL, messages=messages)
 
-    return response.choices[0].message.content.strip()
+    return _sanitize_draft(response.choices[0].message.content)

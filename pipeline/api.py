@@ -24,10 +24,11 @@ from typing import List, Optional
 # true in both places.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 from openai import OpenAI
 
+from auth_token import verify_token
 from config import OPENAI_API_KEY, require_openai_key
 from draft_generator import generate_draft, load_system_prompt, save_system_prompt, get_system_prompt_version
 from analysis import analyze_message
@@ -43,6 +44,20 @@ app = FastAPI(title="Ergode AI Pipeline")
 # incoming path, including the /pyapi prefix, to this function rather
 # than stripping it). Same handlers, reachable both ways.
 router = APIRouter()
+
+
+def require_auth(authorization: str = Header(default="")) -> None:
+    """
+    In local dev, the Node server already checks this token before ever
+    reaching this service (see server.js's middleware) - but in
+    production, Vercel routes /pyapi/(.*) straight here (root
+    vercel.json), completely bypassing Express. Without this, anyone who
+    finds that path could generate OpenAI-billed drafts or overwrite the
+    live system prompt with no login at all.
+    """
+    token = authorization[len("Bearer "):] if authorization.startswith("Bearer ") else None
+    if not verify_token(token):
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 class ThreadHistoryEntry(BaseModel):
@@ -94,7 +109,7 @@ class GenerateResponse(BaseModel):
     system_prompt_version: int
 
 
-@router.post("/generate", response_model=GenerateResponse)
+@router.post("/generate", response_model=GenerateResponse, dependencies=[Depends(require_auth)])
 def generate(payload: GenerateRequest):
     """Generate a draft reply for a customer message, right now, on demand."""
     require_openai_key()
@@ -110,7 +125,13 @@ def generate(payload: GenerateRequest):
     }
 
     draft = generate_draft(context, client=client)
-    analysis = analyze_message(payload.customer_message, draft, client=client)
+    analysis = analyze_message(
+        payload.customer_message,
+        draft,
+        order_facts=context["order_facts"],
+        thread_history=context["thread_history"],
+        client=client,
+    )
 
     if payload.thread_id:
         save_draft(payload.thread_id, payload.seq, context, draft, analysis)
@@ -127,13 +148,13 @@ class SystemPromptPayload(BaseModel):
     content: str
 
 
-@router.get("/system-prompt")
+@router.get("/system-prompt", dependencies=[Depends(require_auth)])
 def get_system_prompt():
     """Return the system prompt exactly as it is used for the next generation."""
     return {"content": load_system_prompt()}
 
 
-@router.put("/system-prompt")
+@router.put("/system-prompt", dependencies=[Depends(require_auth)])
 def update_system_prompt(payload: SystemPromptPayload):
     """
     Save the edit as a new version in MongoDB. Because draft_generator.py
@@ -151,7 +172,7 @@ class DraftEditPayload(BaseModel):
     edited_reply: str
 
 
-@router.put("/draft-edit")
+@router.put("/draft-edit", dependencies=[Depends(require_auth)])
 def edit_draft(payload: DraftEditPayload):
     """Saves a human edit to a draft - the original draft_reply is left untouched."""
     result = save_draft_edit(payload.thread_id, payload.seq, payload.edited_reply)

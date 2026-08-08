@@ -19,7 +19,14 @@ import urllib.error
 import urllib.request
 from typing import Optional
 
+from auth_token import compute_token
 from config import SERVER_URL
+
+# The Node server now gates every /api/* route behind the same shared-
+# password token (see server/services/authToken.js) - this is a server-to-
+# server call, not a browser one, so it computes that same token itself
+# rather than prompting anyone for a password.
+_AUTH_TOKEN = compute_token()
 
 
 def fetch_order_facts(order_id: Optional[str]) -> Optional[dict]:
@@ -35,7 +42,9 @@ def fetch_order_facts(order_id: Optional[str]) -> Optional[dict]:
         return None
 
     try:
-        with urllib.request.urlopen(f"{SERVER_URL}/api/order-lookup/{order_id}", timeout=10) as response:
+        headers = {"Authorization": f"Bearer {_AUTH_TOKEN}"} if _AUTH_TOKEN else {}
+        request = urllib.request.Request(f"{SERVER_URL}/api/order-lookup/{order_id}", headers=headers)
+        with urllib.request.urlopen(request, timeout=10) as response:
             data = json.loads(response.read())
             order = data.get("order", {})
             facts = order.get("customer_safe")

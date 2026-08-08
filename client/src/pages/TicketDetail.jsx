@@ -1,11 +1,30 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, Sparkles, Pencil, Check, ChevronDown, ChevronRight } from "lucide-react";
-import { fetchTicketThread, generateDraft, saveDraftEdit } from "../api.js";
+import { fetchTicketThread, fetchRawMessages, generateDraft, saveDraftEdit } from "../api.js";
 import LanguageInput from "../components/LanguageInput.jsx";
 import MessageText from "../components/MessageText.jsx";
+import OrderDetailsGrid from "../components/OrderDetailsGrid.jsx";
 import { buildCustomerMessageCases } from "../threadPairing.js";
 
 /** The full message thread for one ticket - every customer message gets its own "Generate reply" button. */
+
+/** The original Amazon-branded notification HTML, if we have one on disk for this message - display only, see rawEmailReader.js. */
+function RawAmazonMessage({ html }) {
+  return (
+    <div className="mt-2">
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+        Original Amazon message
+      </p>
+      <iframe
+        title="Original Amazon message"
+        srcDoc={html}
+        sandbox=""
+        className="w-full rounded-lg border border-[rgb(var(--navy-rgb)/0.1)]"
+        style={{ height: "480px" }}
+      />
+    </div>
+  );
+}
 
 function AnalysisPills({ analysis }) {
   return (
@@ -22,7 +41,7 @@ function AnalysisPills({ analysis }) {
 }
 
 /** Shows what the AI actually received for this generation. threadMeta is reference-only, never sent to the AI - it's been unreliable in testing. */
-function AiContextPanel({ context, systemPromptVersion, threadMeta }) {
+function AiContextPanel({ context, systemPromptVersion, threadMeta, reasoning }) {
   const [open, setOpen] = useState(false);
   const facts = context.order_facts;
 
@@ -38,6 +57,15 @@ function AiContextPanel({ context, systemPromptVersion, threadMeta }) {
 
       {open && (
         <div className="mt-3 space-y-4">
+          {reasoning && (
+            <div className="rounded-xl border border-[rgb(var(--violet-rgb)/0.18)] bg-[rgb(var(--violet-rgb)/0.05)] p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--violet)]">
+                Why this reply
+              </p>
+              <p className="mt-1">{reasoning}</p>
+            </div>
+          )}
+
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
               System prompt
@@ -229,21 +257,34 @@ function dateGateOrderFacts(facts, messageDate) {
 export default function TicketDetail({ threadId, onBack }) {
   const [messages, setMessages] = useState(null);
   const [order, setOrder] = useState(null);
+  const [orderId, setOrderId] = useState(null);
   const [threadMeta, setThreadMeta] = useState(null);
   const [error, setError] = useState(null);
   const [language, setLanguage] = useState("");
   // Results keyed by customer message seq, so each generation is independent.
   const [results, setResults] = useState({});
   const [generatingKey, setGeneratingKey] = useState(null);
+  // Raw Amazon-branded HTML keyed by message index (= seq) - see rawEmailReader.js.
+  const [rawMessages, setRawMessages] = useState({});
 
   useEffect(() => {
     fetchTicketThread(threadId)
       .then((data) => {
         setMessages(data.messages);
         setOrder(data.order || null);
+        setOrderId(data.order_id || null);
         setThreadMeta(data.thread_meta || null);
       })
       .catch((err) => setError(err.message));
+
+    fetchRawMessages(threadId)
+      .then((data) => {
+        const byIndex = Object.fromEntries(data.messages.map((m) => [m.index, m]));
+        setRawMessages(byIndex);
+      })
+      .catch(() => {
+        // No raw files for this thread, or the read failed - not fatal, the panel just won't offer it.
+      });
   }, [threadId]);
 
   const customerCases = messages ? buildCustomerMessageCases(messages) : [];
@@ -284,7 +325,10 @@ export default function TicketDetail({ threadId, onBack }) {
       </button>
 
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h2 className="text-xl font-semibold">Thread {threadId}</h2>
+        <div>
+          <h2 className="text-xl font-semibold">Thread {threadId}</h2>
+          {orderId && <p className="text-sm text-[var(--muted)]">Order {orderId}</p>}
+        </div>
         <div className="w-56">
           <LanguageInput value={language} onChange={setLanguage} />
         </div>
@@ -297,7 +341,13 @@ export default function TicketDetail({ threadId, onBack }) {
       {!messages && !error && <p className="text-sm text-[var(--muted)]">Loading thread...</p>}
 
       {messages && (
+        <OrderDetailsGrid orderId={orderId} customerSafe={order?.customer_safe} internal={order?.internal} />
+      )}
+
+      {messages && (
+        <div className="grid gap-4 lg:grid-cols-[3fr_2fr] lg:items-start">
         <div className="space-y-3">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Conversation</h3>
           {messages.map((message) => {
             const isCustomer = message.direction === "in";
             const messageCase = isCustomer ? caseBySeq[message.seq] : null;
@@ -328,11 +378,7 @@ export default function TicketDetail({ threadId, onBack }) {
                       className="brand-button-ghost px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Sparkles size={13} />
-                      {isGenerating
-                        ? "Generating..."
-                        : messageCase.realReplies.length > 0
-                        ? "Generate a Ai Reply"
-                        : "Generate AI reply"}
+                      {isGenerating ? "Generating..." : "Generate AI Reply"}
                     </button>
 
                     {result && (
@@ -363,6 +409,7 @@ export default function TicketDetail({ threadId, onBack }) {
                           context={result.context}
                           systemPromptVersion={result.system_prompt_version}
                           threadMeta={threadMeta}
+                          reasoning={result.analysis?.reasoning}
                         />
                       </div>
                     )}
@@ -371,6 +418,22 @@ export default function TicketDetail({ threadId, onBack }) {
               </div>
             );
           })}
+        </div>
+
+        <div className="space-y-4 lg:sticky lg:top-4">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Original Amazon messages
+          </h3>
+          {Object.values(rawMessages).filter((m) => m.type === "message_in").length > 0 ? (
+            Object.values(rawMessages)
+              .filter((m) => m.type === "message_in")
+              .map((m) => <RawAmazonMessage key={m.id} html={m.html} />)
+          ) : (
+            <p className="text-sm text-[var(--muted)]">
+              No original Amazon email on file for this thread.
+            </p>
+          )}
+        </div>
         </div>
       )}
     </div>

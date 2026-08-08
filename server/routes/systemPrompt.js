@@ -7,13 +7,16 @@
  */
 
 const express = require("express");
+const { computeToken } = require("../services/authToken");
 
 const router = express.Router();
 const PIPELINE_URL = process.env.PIPELINE_URL || "http://localhost:8001";
 
 router.get("/", async (req, res) => {
   try {
-    const response = await fetch(`${PIPELINE_URL}/system-prompt`);
+    const response = await fetch(`${PIPELINE_URL}/system-prompt`, {
+      headers: { Authorization: `Bearer ${computeToken()}` },
+    });
     const data = await response.json();
     res.status(response.status).json(data);
   } catch (err) {
@@ -28,7 +31,7 @@ router.put("/", async (req, res) => {
   try {
     const response = await fetch(`${PIPELINE_URL}/system-prompt`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${computeToken()}` },
       body: JSON.stringify(req.body),
     });
     const data = await response.json();

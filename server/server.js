@@ -26,31 +26,55 @@ const systemPromptRouter = require("./routes/systemPrompt");
 const ticketsRouter = require("./routes/tickets");
 const orderLookupRouter = require("./routes/orderLookup");
 const draftEditRouter = require("./routes/draftEdit");
+const authRouter = require("./routes/auth");
+const { verifyToken } = require("./services/authToken");
 
 const app = express();
 const port = process.env.SERVER_PORT || 4000;
 
 // CORS_ORIGIN is a comma-separated allowlist (e.g. the frontend's Vercel
 // domain, plus a custom domain if it has one). Unset locally, which falls
-// back to wide-open - fine for local dev, not for production, which is
-// exactly why this is required in production instead of hardcoded.
+// back to wide-open - fine for local dev, not for production.
 const allowedOrigins = (process.env.CORS_ORIGIN || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+// Fail loud instead of silently running wide-open: a Vercel deploy with no
+// CORS_ORIGIN set would otherwise accept requests from any origin with no
+// warning. Locally (no VERCEL env var) the wide-open fallback still applies.
+if (process.env.VERCEL && allowedOrigins.length === 0) {
+  throw new Error(
+    "CORS_ORIGIN must be set in production (Vercel) - refusing to start with CORS wide open. " +
+      "Set it to the frontend's deployed domain(s), comma-separated."
+  );
+}
+
 app.use(cors({ origin: allowedOrigins.length > 0 ? allowedOrigins : "*" }));
 app.use(express.json());
+
+// Public: logging in, and the health check other services poll.
+app.use("/api/auth", authRouter);
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
+// Everything else under /api requires the shared-password token from /api/auth/login.
+app.use("/api", (req, res, next) => {
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!verifyToken(token)) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+});
+
 app.use("/api/reports", reportsRouter);
 app.use("/api/generate", generateRouter);
 app.use("/api/system-prompt", systemPromptRouter);
 app.use("/api/tickets", ticketsRouter);
 app.use("/api/order-lookup", orderLookupRouter);
 app.use("/api/draft-edit", draftEditRouter);
-
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok" });
-});
 
 // Only bind a real port locally - on Vercel, app.listen() must not run;
 // the platform invokes `app` directly as the request handler instead.

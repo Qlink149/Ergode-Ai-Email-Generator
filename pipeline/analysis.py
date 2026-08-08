@@ -19,8 +19,9 @@ from openai import BadRequestError, OpenAI
 from config import OPENAI_API_KEY, OPENAI_MODEL, require_openai_key
 
 ANALYSIS_INSTRUCTIONS = """
-You are analyzing a customer support exchange. Given the customer's message
-and our draft reply, return a JSON object with exactly these fields:
+You are analyzing a customer support exchange. Given the customer's message,
+the order facts the reply was allowed to use, and our draft reply, return a
+JSON object with exactly these fields:
 
 - "sentiment": one of "positive", "neutral", "frustrated", "angry"
 - "urgency": one of "low", "medium", "high"
@@ -29,6 +30,24 @@ and our draft reply, return a JSON object with exactly these fields:
 - "needs_human_review": true or false
 - "review_reason": one short sentence explaining why it does or doesn't
   need review
+- "reasoning": a clear, concrete explanation (3-5 sentences) of why the
+  reply is written the way it is. Walk through it in this order:
+  1. What the customer actually said or needed, in your own words.
+  2. Which specific order facts confirmed or shaped the situation - name
+     the actual field values (the real date, amount, tracking status,
+     etc.), not just the field names, and say what each one ruled in or
+     ruled out.
+  3. Which approach or skill the reply used and why that one applied here
+     rather than an alternative (e.g. "the retention skill applied
+     because this is a buyer-remorse return, not a defect, so the keep-it
+     offer came before the return path" or "no retention offer because
+     this is our fulfillment error, not the customer's choice to return").
+  4. If anything in the reply is uncertain, unverified, or driven by an
+     absence of data (e.g. no refund_date on file, so it doesn't claim one
+     exists), say so explicitly.
+  Do not write a generic restatement of what a support reply does ("it
+  addresses the customer's concern professionally") - every sentence
+  should reference something specific and real from this exact case.
 
 Set needs_human_review to true whenever any of these apply: the customer
 sounds angry or frustrated, the draft promises a refund, replacement, or
@@ -46,19 +65,44 @@ _FALLBACK_RESULT = {
     "confidence": 0,
     "needs_human_review": True,
     "review_reason": "Analysis could not be parsed - defaulting to human review.",
+    "reasoning": "Could not be determined - analysis failed to parse.",
 }
 
 
-def analyze_message(customer_message: str, draft_reply: str, client: Optional[OpenAI] = None) -> dict:
+def analyze_message(
+    customer_message: str,
+    draft_reply: str,
+    order_facts: Optional[dict] = None,
+    thread_history: Optional[list] = None,
+    client: Optional[OpenAI] = None,
+) -> dict:
     """Ask the model to score one customer-message-and-draft-reply pair."""
     require_openai_key()
     client = client or OpenAI(api_key=OPENAI_API_KEY)
+
+    facts_block = ""
+    if order_facts:
+        known_facts = {k: v for k, v in order_facts.items() if v}
+        if known_facts:
+            facts_lines = "\n".join(f"- {k}: {v}" for k, v in known_facts.items())
+            facts_block = f"\n\nOrder facts available for this reply:\n{facts_lines}"
+
+    history_block = ""
+    if thread_history:
+        history_lines = "\n".join(
+            f"- {'Customer' if entry.get('direction') == 'in' else 'Us'}: {entry.get('text', '')}"
+            for entry in thread_history
+        )
+        history_block = f"\n\nEarlier messages in this thread, oldest first:\n{history_lines}"
 
     messages = [
         {"role": "system", "content": ANALYSIS_INSTRUCTIONS},
         {
             "role": "user",
-            "content": f"Customer message:\n{customer_message}\n\nDraft reply:\n{draft_reply}",
+            "content": (
+                f"Customer message:\n{customer_message}{facts_block}{history_block}"
+                f"\n\nDraft reply:\n{draft_reply}"
+            ),
         },
     ]
     kwargs = {"model": OPENAI_MODEL, "messages": messages, "response_format": {"type": "json_object"}}

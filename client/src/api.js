@@ -15,6 +15,16 @@
 // would otherwise produce double-slash URLs like ".../app//api/tickets".
 const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
+const TOKEN_KEY = "ergode_auth_token";
+
+export function getToken() {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
 async function handleResponse(response) {
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -23,8 +33,41 @@ async function handleResponse(response) {
   return response.json();
 }
 
+/**
+ * Every authenticated call goes through here - attaches the shared login
+ * token, and on a 401 (missing/stale token) clears it and fires a window
+ * event App.jsx listens for, so the whole app falls back to the login
+ * screen instead of every page having to handle that case separately.
+ */
+async function apiFetch(path, options = {}) {
+  const token = getToken();
+  const headers = { ...(options.headers || {}) };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+
+  if (response.status === 401) {
+    clearToken();
+    window.dispatchEvent(new Event("ergode-auth-expired"));
+    throw new Error("Session expired - please log in again.");
+  }
+
+  return handleResponse(response);
+}
+
+/** Verifies the shared password against the server and stores the session token on success. */
+export async function login(password) {
+  const response = await fetch(`${API_BASE}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  const data = await handleResponse(response);
+  localStorage.setItem(TOKEN_KEY, data.token);
+}
+
 export async function fetchReport() {
-  return handleResponse(await fetch(`${API_BASE}/api/reports`));
+  return apiFetch("/api/reports");
 }
 
 /**
@@ -42,64 +85,63 @@ export async function generateDraft({
   threadId,
   seq,
 }) {
-  return handleResponse(
-    await fetch(`${API_BASE}/api/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        customer_message: customerMessage,
-        order_id: orderId || null,
-        is_relay: Boolean(isRelay),
-        thread_history: threadHistory || [],
-        language: language || null,
-        order_facts: orderFacts || null,
-        // Only the ticketing page passes these, so this generation gets
-        // written back to ai_drafts against the thread it belongs to.
-        thread_id: threadId || null,
-        seq: seq != null ? String(seq) : null,
-      }),
-    })
-  );
+  return apiFetch("/api/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      customer_message: customerMessage,
+      order_id: orderId || null,
+      is_relay: Boolean(isRelay),
+      thread_history: threadHistory || [],
+      language: language || null,
+      order_facts: orderFacts || null,
+      // Only the ticketing page passes these, so this generation gets
+      // written back to ai_drafts against the thread it belongs to.
+      thread_id: threadId || null,
+      seq: seq != null ? String(seq) : null,
+    }),
+  });
 }
 
 /** Look up one order against the live Order API + CRM Thread API. */
 export async function fetchOrderLookup(orderId) {
-  return handleResponse(await fetch(`${API_BASE}/api/order-lookup/${orderId}`));
+  return apiFetch(`/api/order-lookup/${orderId}`);
 }
 
 export async function fetchSystemPrompt() {
-  return handleResponse(await fetch(`${API_BASE}/api/system-prompt`));
+  return apiFetch("/api/system-prompt");
 }
 
 export async function fetchTickets() {
-  return handleResponse(await fetch(`${API_BASE}/api/tickets`));
+  return apiFetch("/api/tickets");
 }
 
 export async function fetchTicketThread(threadId) {
-  return handleResponse(await fetch(`${API_BASE}/api/tickets/${threadId}`));
+  return apiFetch(`/api/tickets/${threadId}`);
+}
+
+/** The original raw Amazon-branded email HTML for this thread, if we have it on disk. */
+export async function fetchRawMessages(threadId) {
+  return apiFetch(`/api/tickets/${threadId}/raw-messages`);
 }
 
 /** Save a human edit to a previously generated draft. */
 export async function saveDraftEdit({ threadId, seq, editedReply }) {
-  return handleResponse(
-    await fetch(`${API_BASE}/api/draft-edit`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        thread_id: threadId,
-        seq: String(seq),
-        edited_reply: editedReply,
-      }),
-    })
-  );
+  return apiFetch("/api/draft-edit", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      thread_id: threadId,
+      seq: String(seq),
+      edited_reply: editedReply,
+    }),
+  });
 }
 
 export async function saveSystemPrompt(content) {
-  return handleResponse(
-    await fetch(`${API_BASE}/api/system-prompt`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
-    })
-  );
+  return apiFetch("/api/system-prompt", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
 }
