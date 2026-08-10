@@ -18,6 +18,8 @@
  *    an empty string so callers can detect "no usable text" explicitly.
  */
 
+const { fetchWithRetry } = require("./fetchWithRetry");
+
 const CRM_API_URL = process.env.CRM_API_URL;
 const API_KEY = process.env.CRM_API_KEY;
 
@@ -82,9 +84,8 @@ async function fetchThreadContext({ orderId, threadId } = {}) {
   }
 
   const params = new URLSearchParams(orderId ? { order_id: orderId } : { thread_id: threadId });
-  const response = await fetch(`${CRM_API_URL}?${params}`, {
+  const response = await fetchWithRetry(`${CRM_API_URL}?${params}`, {
     headers: { "x-api-key": API_KEY },
-    signal: AbortSignal.timeout(15000),
   });
 
   const body = await response.json();

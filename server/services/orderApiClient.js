@@ -12,6 +12,8 @@
  * kept deliberately separate so the safety rule lives in exactly one place.
  */
 
+const { fetchWithRetry } = require("./fetchWithRetry");
+
 const ORDER_API_URL = process.env.ORDER_API_URL;
 const USERNAME = process.env.ORDER_API_USERNAME;
 const PASSWORD = process.env.ORDER_API_PASSWORD;
@@ -29,7 +31,7 @@ async function fetchOrderDetails(orderId) {
     throw new Error("Order API credentials are not configured (ORDER_API_USERNAME/ORDER_API_PASSWORD).");
   }
 
-  const response = await fetch(ORDER_API_URL, {
+  const response = await fetchWithRetry(ORDER_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -39,7 +41,6 @@ async function fetchOrderDetails(orderId) {
       function_name: "fetch_order_details",
       "parameters[order_id]": orderId,
     }),
-    signal: AbortSignal.timeout(15000), // was hanging forever on some calls with no timeout
   });
 
   const data = await response.json();
