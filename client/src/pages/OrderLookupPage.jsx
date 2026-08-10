@@ -1,36 +1,70 @@
 import { useState } from "react";
 import { Search, Sparkles, ShieldAlert } from "lucide-react";
 import { fetchOrderLookup, generateDraft } from "../api.js";
-import SideBySideReplies from "../components/SideBySideReplies.jsx";
 import LanguageInput from "../components/LanguageInput.jsx";
 import MessageText from "../components/MessageText.jsx";
-import { buildLatestCase } from "../threadPairing.js";
+import AnalysisPills from "../components/AnalysisPills.jsx";
+import AiContextPanel from "../components/AiContextPanel.jsx";
+import { buildCustomerMessageCases } from "../threadPairing.js";
 
 /**
  * OrderLookupPage.jsx
  * ---------------------
  * Look up one order by id against the real, live Order API and CRM
  * Thread API (server/routes/orderLookup.js), see exactly what they
- * return, then generate an AI reply grounded in those real facts and
- * compare it against whatever the CRM thread shows was actually sent.
+ * return, then generate an AI reply grounded in those real facts for
+ * every customer message in the thread - same per-message pattern as
+ * TicketDetail.jsx, just against a live lookup instead of a synced ticket.
  *
  * The CRM Thread API's messages come back newest-first with different
  * field names (message_type/message_body) than our zip-derived shape
- * (direction/text) - normalizeThreadMessages() below is the one place
+ * (direction/text/seq) - normalizeThreadMessages() below is the one place
  * that translates between them, so the rest of this file and
- * SideBySideReplies never need to know two shapes exist.
+ * buildCustomerMessageCases() never need to know two shapes exist.
  */
 
-function normalizeThreadMessages(emailSummary) {
+function normalizeThreadMessages(emailSummary, orderId) {
   return [...emailSummary]
     .reverse() // API returns newest-first; we want chronological order
-    .map((m) => ({
+    .map((m, i) => ({
+      seq: i + 1,
       direction: m.message_type === "message_in" ? "in" : "out",
-      // The server already decodes HTML entities and turns the CRM API's
-      // "HTML content is empty." placeholder into "" - see
-      // server/services/crmThreadApiClient.js for why that happens.
+      // The server already decodes HTML entities, strips Amazon boilerplate
+      // down to the customer's actual words, and detects relay messages -
+      // see server/routes/orderLookup.js's cleanThread(), same cleaning
+      // pass the ticket queue's sync applies.
       text: m.message_body,
+      order_id: orderId,
+      is_relay: m.is_relay || false,
+      created_time: m.created_time || null,
     }));
+}
+
+/** Strips order facts that weren't true yet as of the given message date - a reply from before a refund shouldn't see that refund. Same logic as TicketDetail.jsx. */
+function dateGateOrderFacts(facts, messageDate) {
+  if (!facts || !messageDate) return facts;
+  const asOf = new Date(messageDate);
+  const gated = { ...facts };
+
+  const shippedDate = facts.shipped_date ? new Date(facts.shipped_date) : null;
+  if (shippedDate && asOf < shippedDate) {
+    gated.carrier_name = null;
+    gated.tracking_id = null;
+    gated.tracking_url = null;
+    gated.ship_method = null;
+    gated.shipped_date = null;
+    gated.customer_tracking_status = null;
+    gated.last_mile_carrier = null;
+    gated.last_mile_tracking = null;
+  }
+
+  const refundDate = facts.refund_date ? new Date(facts.refund_date) : null;
+  if (refundDate && asOf < refundDate) {
+    gated.customer_refund_amount = null;
+    gated.refund_date = null;
+  }
+
+  return gated;
 }
 
 /** True if at least one inbound message actually has usable text. */
@@ -54,8 +88,11 @@ export default function OrderLookupPage() {
   const [manualMessage, setManualMessage] = useState("");
   const [lookup, setLookup] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [result, setResult] = useState(null);
+  // Results keyed by customer message seq, so each generation is independent -
+  // same pattern as TicketDetail.jsx. "manual" is the key used for the
+  // no-usable-customer-text fallback case below.
+  const [results, setResults] = useState({});
+  const [generatingKey, setGeneratingKey] = useState(null);
   const [error, setError] = useState(null);
 
   async function handleLookup() {
@@ -63,7 +100,7 @@ export default function OrderLookupPage() {
     setLoading(true);
     setError(null);
     setLookup(null);
-    setResult(null);
+    setResults({});
     try {
       const data = await fetchOrderLookup(orderIdInput.trim());
       setLookup(data);
@@ -74,63 +111,50 @@ export default function OrderLookupPage() {
     }
   }
 
-  async function handleGenerate() {
-    if (!lookup) return;
+  // No internal_status_note (reasoning_status) - same as TicketDetail.jsx,
+  // proven unreliable against real threads, never sent to the AI.
+  const orderFacts = lookup ? { ...lookup.order.customer_safe } : null;
 
-    let customerMessage = manualMessage.trim();
-    let threadHistory = [];
-    let realReply = null;
-
-    if (lookup.thread?.email_summary?.length) {
-      const messages = normalizeThreadMessages(lookup.thread.email_summary);
-      const latestCase = buildLatestCase(messages);
-
-      if (latestCase) {
-        customerMessage = latestCase.context.customerMessage;
-        threadHistory = latestCase.context.threadHistory;
-        realReply = latestCase.realReply;
-      } else {
-        // No usable inbound text anywhere in the thread (the live CRM
-        // API's empty-message-body gap - see crmThreadApiClient.js) -
-        // still carry forward whatever history has real text, so the
-        // manually-typed message below at least gets the right context.
-        threadHistory = messages
-          .filter((m) => m.text)
-          .map((m) => ({ direction: m.direction, text: m.text }));
-      }
-    }
-
-    // No `if (!customerMessage) return` here on purpose: when the CRM gives
-    // us no usable inbound text and nothing was typed manually, we still
-    // have real order facts - generation proceeds as a proactive status
-    // update instead of a reply to something specific (see
-    // draft_generator.py's has_customer_message branch).
-
-    setGenerating(true);
+  async function handleGenerate(key, context, messageDate, realReplies) {
+    setGeneratingKey(key);
     setError(null);
     try {
+      // Only the customer's own prior messages - agent replies are excluded
+      // from history, same as TicketDetail.jsx.
+      const customerOnlyHistory = context.threadHistory.filter((m) => m.direction === "in");
       const response = await generateDraft({
-        customerMessage,
-        orderId: lookup.order_id,
-        threadHistory,
+        ...context,
+        threadHistory: customerOnlyHistory,
+        orderFacts: dateGateOrderFacts(orderFacts, messageDate),
         language,
-        orderFacts: {
-          ...lookup.order.customer_safe,
-          internal_status_note: lookup.order.reasoning_status,
-        },
       });
-      setResult({ ...response, realReply });
+      setResults((prev) => ({ ...prev, [key]: { ...response, realReplies } }));
     } catch (err) {
       setError(err.message);
     } finally {
-      setGenerating(false);
+      setGeneratingKey(null);
     }
+  }
+
+  /** No usable customer text anywhere (CRM API gap, or thread fetch failed) - generate a proactive status update instead of answering a specific message. */
+  function handleManualGenerate() {
+    const threadHistory = lookup?.thread?.email_summary
+      ? normalizeThreadMessages(lookup.thread.email_summary, lookup.order_id)
+          .filter((m) => m.direction === "in" && m.text)
+          .map((m) => ({ direction: m.direction, text: m.text }))
+      : [];
+    handleGenerate(
+      "manual",
+      { customerMessage: manualMessage.trim(), orderId: lookup.order_id, isRelay: false, threadHistory },
+      null,
+      []
+    );
   }
 
   const needsManualMessage =
     lookup &&
     (lookup.thread_error ||
-      !hasUsableCustomerText(normalizeThreadMessages(lookup.thread?.email_summary || [])));
+      !hasUsableCustomerText(normalizeThreadMessages(lookup.thread?.email_summary || [], lookup.order_id)));
 
   return (
     <div className="space-y-6">
@@ -203,8 +227,8 @@ export default function OrderLookupPage() {
                 <p className="text-sm text-[var(--executive-error)]">{lookup.thread_error}</p>
               ) : (
                 <div className="space-y-2">
-                  {normalizeThreadMessages(lookup.thread.email_summary).map((m, i) => (
-                    <div key={i} className="text-sm">
+                  {normalizeThreadMessages(lookup.thread.email_summary, lookup.order_id).map((m) => (
+                    <div key={m.seq} className="text-sm">
                       <span className="font-semibold">{m.direction === "in" ? "Customer" : "Us"}:</span>{" "}
                       {m.text ? (
                         <MessageText text={m.text} />
@@ -220,77 +244,114 @@ export default function OrderLookupPage() {
             </div>
           </div>
 
-          <div className="executive-card space-y-3 p-5">
-            {needsManualMessage && (
-              <>
-                <label className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                  Customer message (optional)
-                  {lookup.thread_error
-                    ? " — CRM thread unavailable, type one in if you have it"
-                    : " — CRM API returned no usable text for this thread's messages"}
-                </label>
-                <textarea
-                  className="brand-input w-full rounded-lg px-3 py-2 text-sm"
-                  rows={3}
-                  value={manualMessage}
-                  onChange={(e) => setManualMessage(e.target.value)}
-                  placeholder="Type it in if you have it, or leave blank to generate a proactive status update from the order facts alone."
-                />
-              </>
-            )}
+          <div className="w-56">
+            <LanguageInput value={language} onChange={setLanguage} />
+          </div>
 
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="min-w-[220px] flex-1">
-                <LanguageInput value={language} onChange={setLanguage} />
-              </div>
+          {needsManualMessage ? (
+            <div className="executive-card space-y-3 p-5">
+              <label className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                Customer message (optional)
+                {lookup.thread_error
+                  ? " — CRM thread unavailable, type one in if you have it"
+                  : " — CRM API returned no usable text for this thread's messages"}
+              </label>
+              <textarea
+                className="brand-input w-full rounded-lg px-3 py-2 text-sm"
+                rows={3}
+                value={manualMessage}
+                onChange={(e) => setManualMessage(e.target.value)}
+                placeholder="Type it in if you have it, or leave blank to generate a proactive status update from the order facts alone."
+              />
               <button
-                onClick={handleGenerate}
-                disabled={generating}
+                onClick={handleManualGenerate}
+                disabled={generatingKey === "manual"}
                 className="brand-button px-5 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Sparkles size={16} />
-                {generating ? "Generating..." : "Generate AI Reply"}
+                {generatingKey === "manual" ? "Generating..." : "Generate with AI"}
               </button>
-            </div>
-          </div>
 
-          {result && (
-            <>
-              {result.realReply ? (
-                <SideBySideReplies
-                  realReply={result.realReply}
-                  draftReply={result.draft_reply}
-                  realTitle="What was actually sent (CRM)"
-                  draftTitle="What our AI generated"
-                />
-              ) : (
-                <div className="executive-card p-5">
-                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                    AI-drafted reply
-                  </h3>
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{result.draft_reply}</p>
+              {results.manual && (
+                <div className="space-y-3 pt-2">
+                  <div className="executive-card p-5">
+                    <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      What our AI generated
+                    </h3>
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                      {results.manual.draft_reply}
+                    </p>
+                  </div>
+                  <AnalysisPills analysis={results.manual.analysis} />
+                  <AiContextPanel
+                    context={results.manual.context}
+                    systemPromptVersion={results.manual.system_prompt_version}
+                    reasoning={results.manual.analysis?.reasoning}
+                  />
                 </div>
               )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {buildCustomerMessageCases(
+                normalizeThreadMessages(lookup.thread.email_summary, lookup.order_id)
+              ).map((c) => {
+                const result = results[c.seq];
+                const isGenerating = generatingKey === c.seq;
+                return (
+                  <div key={c.seq} className="executive-card-soft p-4">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                      Customer message
+                    </p>
+                    <MessageText text={c.context.customerMessage} />
 
-              <div className="executive-card p-5">
-                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                  AI analysis
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  <span className="pill pill-neutral">sentiment: {result.analysis.sentiment}</span>
-                  <span className="pill pill-neutral">urgency: {result.analysis.urgency}</span>
-                  <span className="pill pill-neutral">
-                    confidence: {Math.round((result.analysis.confidence ?? 0) * 100)}%
-                  </span>
-                  <span
-                    className={`pill ${result.analysis.needs_human_review ? "pill-danger" : "pill-success"}`}
-                  >
-                    {result.analysis.needs_human_review ? "needs human review" : "low risk"}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm text-[var(--muted)]">{result.analysis.review_reason}</p>
-              </div>
-            </>
+                    <button
+                      onClick={() => handleGenerate(c.seq, c.context, c.messageDate, c.realReplies)}
+                      disabled={isGenerating}
+                      className="brand-button-ghost mt-3 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Sparkles size={13} />
+                      {isGenerating ? "Generating..." : "Generate with AI"}
+                    </button>
+
+                    {result && (
+                      <div className="mt-3 space-y-3">
+                        <div className="grid gap-4 md:grid-cols-2">
+                          {result.realReplies?.length > 0 && (
+                            <div className="executive-card p-5">
+                              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+                                What was actually sent (CRM)
+                              </h3>
+                              <div className="space-y-3">
+                                {result.realReplies.map((text, i) => (
+                                  <p key={i} className="whitespace-pre-wrap text-sm leading-relaxed">
+                                    {text}
+                                  </p>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          <div className="executive-card p-5">
+                            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+                              What our AI generated
+                            </h3>
+                            <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                              {result.draft_reply}
+                            </p>
+                          </div>
+                        </div>
+                        <AnalysisPills analysis={result.analysis} />
+                        <AiContextPanel
+                          context={result.context}
+                          systemPromptVersion={result.system_prompt_version}
+                          reasoning={result.analysis?.reasoning}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </>
       )}

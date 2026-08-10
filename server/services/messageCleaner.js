@@ -143,4 +143,9 @@ function cleanInboundText(rawText) {
   return extractCustomerMessage(rawText);
 }
 
-module.exports = { cleanInboundText, isRelayMessage };
+/** The CRM API returns runs of several spaces where the source had line breaks - collapse to one. */
+function collapseWhitespace(text) {
+  return text.replace(/[ \t]{2,}/g, " ").trim();
+}
+
+module.exports = { cleanInboundText, isRelayMessage, collapseWhitespace };

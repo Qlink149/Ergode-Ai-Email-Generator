@@ -9,15 +9,10 @@ const { getDb } = require("../db");
 const { fetchOrderDetails } = require("./orderApiClient");
 const { fetchThreadContext } = require("./crmThreadApiClient");
 const { classifyOrder } = require("./disclosureClassifier");
-const { cleanInboundText, isRelayMessage } = require("./messageCleaner");
+const { cleanInboundText, isRelayMessage, collapseWhitespace } = require("./messageCleaner");
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** The CRM API returns runs of several spaces where the source had line breaks - collapse to one. */
-function collapseWhitespace(text) {
-  return text.replace(/[ \t]{2,}/g, " ").trim();
 }
 
 /** Matches the {seq, direction, text, order_id, is_relay} shape thread_parser.py produces from the zip. */
