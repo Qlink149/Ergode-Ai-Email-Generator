@@ -34,6 +34,7 @@ from draft_generator import generate_draft
 from system_prompt_store import load_system_prompt, save_system_prompt, get_system_prompt_version
 from analysis import analyze_message
 from draft_store import save_draft, save_draft_edit
+from translator import translate_to_english
 
 app = FastAPI(title="Ergode AI Pipeline")
 
@@ -190,6 +191,18 @@ def edit_draft(payload: DraftEditPayload):
     if result is None:
         return {"status": "not_found"}
     return {"status": "saved", **result}
+
+
+class TranslatePayload(BaseModel):
+    text: str
+
+
+@router.post("/translate", dependencies=[Depends(require_auth)])
+def translate(payload: TranslatePayload):
+    """Translates one message to English for display, if it isn't already."""
+    require_openai_key()
+    translated = translate_to_english(payload.text, client=OpenAI(api_key=OPENAI_API_KEY))
+    return {"translated": translated}
 
 
 @router.get("/health")

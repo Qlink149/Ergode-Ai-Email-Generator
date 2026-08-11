@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { fetchTicketThread, generateDraft } from "../api.js";
 import LanguageInput from "../components/LanguageInput.jsx";
-import MessageText from "../components/MessageText.jsx";
+import ConversationMessage from "../components/ConversationMessage.jsx";
 import OrderDetailsGrid from "../components/OrderDetailsGrid.jsx";
-import EditableDraft from "../components/EditableDraft.jsx";
-import AnalysisPills from "../components/AnalysisPills.jsx";
-import AiContextPanel from "../components/AiContextPanel.jsx";
+import GenerateWithAiPanel from "../components/GenerateWithAiPanel.jsx";
 import { buildCustomerMessageCases } from "../threadPairing.js";
 import { dateGateOrderFacts } from "../orderFacts.js";
 
@@ -124,114 +122,31 @@ export default function TicketDetail({ threadId, onBack }) {
               const isCustomer = message.direction === "in";
               const messageCase = isCustomer ? caseBySeq[message.seq] : null;
               const isSelected = isCustomer && selectedSeq === message.seq;
-              // The customer's own marketplace relay address, real (from the Order API) -
-              // shown as "From:" on their messages and "To:" on ours, same as the real CRM.
-              const relayEmail = order?.internal?.email || null;
 
               return (
-                <div
+                <ConversationMessage
                   key={`${message.direction}-${message.seq}`}
+                  message={message}
+                  // The customer's own marketplace relay address, real (from the Order
+                  // API) - shown as "From:" on their messages and "To:" on ours, same
+                  // as the real CRM.
+                  relayEmail={order?.internal?.email || null}
+                  selectable={!!messageCase}
+                  isSelected={isSelected}
                   onClick={() => messageCase && setSelectedSeq(message.seq)}
-                  // .executive-card-soft sets its own background/border as plain class rules,
-                  // which beat same-specificity Tailwind utilities in the cascade - inline
-                  // style always wins, so this actually renders. Solid theme colors (not a
-                  // translucent tint) so the page's background blobs can't bleed through and
-                  // muddy them.
-                  style={{
-                    background: isCustomer ? "#ffffff" : "var(--mist)",
-                    borderLeft: `4px solid ${isCustomer ? "var(--lavender)" : "var(--violet)"}`,
-                  }}
-                  className={`executive-card-soft p-4 ${messageCase ? "cursor-pointer" : ""} ${
-                    isSelected ? "ring-2 ring-[rgb(var(--violet-rgb)/0.5)]" : ""
-                  }`}
-                >
-                  <div className="mb-2 flex items-start justify-between gap-3 border-b border-[rgb(var(--navy-rgb)/0.08)] pb-2">
-                    <div className="text-xs leading-relaxed">
-                      <p>
-                        <span className="font-semibold">{isCustomer ? "From: " : "To: "}</span>
-                        {relayEmail || "unknown"}
-                      </p>
-                      <div className="mt-1 flex items-center gap-2">
-                        <span className="font-semibold uppercase tracking-wide text-[var(--muted)]">
-                          {isCustomer ? "Customer" : "Us (agent)"}
-                        </span>
-                        {message.is_relay && <span className="pill pill-danger">relayed by marketplace</span>}
-                        {message.order_id && <span className="pill pill-neutral">{message.order_id}</span>}
-                        {isSelected && <span className="pill pill-neutral">selected</span>}
-                      </div>
-                    </div>
-                    {message.created_time && (
-                      <span className="shrink-0 text-xs text-[var(--muted)]">{message.created_time}</span>
-                    )}
-                  </div>
-                  <MessageText text={message.text} />
-                </div>
+                />
               );
             })}
           </div>
 
-          <div className="space-y-4 lg:sticky lg:top-4">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Generate with AI</h3>
-
-            {!selectedCase && (
-              <div className="executive-card-soft p-4 text-sm text-[var(--muted)]">
-                No customer message to reply to yet.
-              </div>
-            )}
-
-            {selectedCase && (
-              <>
-                <div className="executive-card-soft p-6">
-                  <p className="mb-4 text-xs text-[var(--muted)]">
-                    Replying to the customer message from {selectedCase.messageDate || "this thread"}.
-                  </p>
-                  <button
-                    onClick={handleGenerate}
-                    disabled={isGenerating}
-                    className={`brand-button w-full justify-center px-4 py-3.5 text-sm transition-transform duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${
-                      isGenerating ? "" : "ai-cta-glow hover:scale-[1.02]"
-                    }`}
-                  >
-                    <Sparkles size={16} className={isGenerating ? "animate-spin" : ""} />
-                    {isGenerating ? "Generating..." : selectedResult ? "Regenerate AI Reply" : "Generate AI Reply"}
-                  </button>
-                </div>
-
-                {selectedResult && (
-                  <div className="space-y-3">
-                    {selectedCase.realReplies.length > 0 && (
-                      <div className="executive-card p-5">
-                        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                          What was actually sent (CRM)
-                        </h3>
-                        <div className="space-y-3">
-                          {selectedCase.realReplies.map((text, i) => (
-                            <p key={i} className="whitespace-pre-wrap text-sm leading-relaxed">
-                              {text}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <EditableDraft
-                      threadId={threadId}
-                      seq={String(selectedCase.seq)}
-                      draftReply={selectedResult.draft_reply}
-                    />
-                    <AnalysisPills analysis={selectedResult.analysis} />
-                    <AiContextPanel
-                      context={selectedResult.context}
-                      systemPromptVersion={selectedResult.system_prompt_version}
-                      threadMeta={threadMeta}
-                      reasoning={selectedResult.analysis?.reasoning}
-                      policyApplied={selectedResult.analysis?.policy_applied}
-                      fieldsUsed={selectedResult.analysis?.fields_used}
-                    />
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+          <GenerateWithAiPanel
+            selectedCase={selectedCase}
+            selectedResult={selectedResult}
+            isGenerating={isGenerating}
+            onGenerate={handleGenerate}
+            threadId={threadId}
+            threadMeta={threadMeta}
+          />
         </div>
       )}
     </div>

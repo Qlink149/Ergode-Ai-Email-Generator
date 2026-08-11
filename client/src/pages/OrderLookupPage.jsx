@@ -1,12 +1,10 @@
-import { useState } from "react";
-import { Search, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Search } from "lucide-react";
 import { fetchOrderLookup, generateDraft } from "../api.js";
 import LanguageInput from "../components/LanguageInput.jsx";
-import MessageText from "../components/MessageText.jsx";
+import ConversationMessage from "../components/ConversationMessage.jsx";
 import OrderDetailsGrid from "../components/OrderDetailsGrid.jsx";
-import AnalysisPills from "../components/AnalysisPills.jsx";
-import AiContextPanel from "../components/AiContextPanel.jsx";
-import CustomerCaseCard from "../components/CustomerCaseCard.jsx";
+import GenerateWithAiPanel from "../components/GenerateWithAiPanel.jsx";
 import { buildCustomerMessageCases } from "../threadPairing.js";
 import { dateGateOrderFacts } from "../orderFacts.js";
 
@@ -14,16 +12,16 @@ import { dateGateOrderFacts } from "../orderFacts.js";
  * OrderLookupPage.jsx
  * ---------------------
  * Look up one order by id against the real, live Order API and CRM
- * Thread API (server/routes/orderLookup.js), see exactly what they
- * return, then generate an AI reply grounded in those real facts for
- * every customer message in the thread - same per-message pattern as
- * TicketDetail.jsx, just against a live lookup instead of a synced ticket.
+ * Thread API (server/routes/orderLookup.js), then generate an AI reply
+ * grounded in those real facts - same two-column, click-a-message
+ * architecture as TicketDetail.jsx (conversation on the left, a persistent
+ * "Generate with AI" panel on the right that follows whichever message is
+ * selected), just against a live lookup instead of a synced ticket.
  *
  * The CRM Thread API's messages come back newest-first with different
  * field names (message_type/message_body) than our zip-derived shape
  * (direction/text/seq) - normalizeThreadMessages() below is the one place
- * that translates between them, so the rest of this file and
- * buildCustomerMessageCases() never need to know two shapes exist.
+ * that translates between them.
  */
 
 function normalizeThreadMessages(emailSummary, orderId) {
@@ -51,15 +49,15 @@ function hasUsableCustomerText(messages) {
 export default function OrderLookupPage() {
   const [orderIdInput, setOrderIdInput] = useState("");
   const [language, setLanguage] = useState("");
-  const [manualMessage, setManualMessage] = useState("");
   const [lookup, setLookup] = useState(null);
   const [loading, setLoading] = useState(false);
   // Results keyed by customer message seq, so each generation is independent -
-  // same pattern as TicketDetail.jsx. "manual" is the key used for the
-  // no-usable-customer-text fallback case below.
+  // same pattern as TicketDetail.jsx.
   const [results, setResults] = useState({});
   const [generatingKey, setGeneratingKey] = useState(null);
   const [error, setError] = useState(null);
+  // Which customer message the right-hand panel is currently showing.
+  const [selectedSeq, setSelectedSeq] = useState(null);
 
   async function handleLookup() {
     if (!orderIdInput.trim()) return;
@@ -67,6 +65,7 @@ export default function OrderLookupPage() {
     setError(null);
     setLookup(null);
     setResults({});
+    setSelectedSeq(null);
     try {
       const data = await fetchOrderLookup(orderIdInput.trim());
       setLookup(data);
@@ -90,6 +89,32 @@ export default function OrderLookupPage() {
         order_details: lookup.thread.order_details ?? [],
       }
     : null;
+  // The CRM Thread API's own thread_id, if it came back - falls back to the
+  // order id so a draft can still be saved/edited even when the thread
+  // fetch failed (needsManualMessage's case). Same key ai_drafts is keyed
+  // by for TicketDetail.jsx's synced tickets.
+  const threadIdForDrafts = lookup ? lookup.thread?.thread_id || lookup.order_id : null;
+
+  const needsManualMessage =
+    lookup &&
+    (lookup.thread_error ||
+      !hasUsableCustomerText(normalizeThreadMessages(lookup.thread?.email_summary || [], lookup.order_id)));
+
+  const messages =
+    lookup && !needsManualMessage ? normalizeThreadMessages(lookup.thread.email_summary, lookup.order_id) : [];
+  const customerCases = buildCustomerMessageCases(messages);
+  const caseBySeq = Object.fromEntries(customerCases.map((c) => [c.seq, c]));
+
+  // Default the panel to the most recent customer message once a lookup loads - same pattern as TicketDetail.jsx.
+  useEffect(() => {
+    if (selectedSeq === null && customerCases.length > 0) {
+      setSelectedSeq(customerCases[customerCases.length - 1].seq);
+    }
+  }, [customerCases, selectedSeq]);
+
+  const selectedCase = selectedSeq !== null ? caseBySeq[selectedSeq] : null;
+  const selectedResult = selectedSeq !== null ? results[selectedSeq] : null;
+  const isGenerating = generatingKey === selectedSeq;
 
   async function handleGenerate(key, context, messageDate, realReplies) {
     setGeneratingKey(key);
@@ -107,10 +132,12 @@ export default function OrderLookupPage() {
         threadHistory: customerOnlyHistory,
         orderFacts: dateGateOrderFacts(orderFacts, messageDateForGating),
         language,
+        threadId: threadIdForDrafts,
+        seq: key,
         cancellationMarked: lookup?.thread?.cancellation_marked,
         threadReason: lookup?.thread?.thread_reason,
       });
-      setResults((prev) => ({ ...prev, [key]: { ...response, realReplies } }));
+      setResults((prev) => ({ ...prev, [key]: response }));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -118,25 +145,10 @@ export default function OrderLookupPage() {
     }
   }
 
-  /** No usable customer text anywhere (CRM API gap, or thread fetch failed) - generate a proactive status update instead of answering a specific message. */
-  function handleManualGenerate() {
-    const threadHistory = lookup?.thread?.email_summary
-      ? normalizeThreadMessages(lookup.thread.email_summary, lookup.order_id)
-          .filter((m) => m.direction === "in" && m.text)
-          .map((m) => ({ direction: m.direction, text: m.text }))
-      : [];
-    handleGenerate(
-      "manual",
-      { customerMessage: manualMessage.trim(), orderId: lookup.order_id, isRelay: false, threadHistory },
-      null,
-      []
-    );
+  function handleSelectedGenerate() {
+    if (!selectedCase) return;
+    handleGenerate(selectedCase.seq, selectedCase.context, selectedCase.messageDate, selectedCase.realReplies);
   }
-
-  const needsManualMessage =
-    lookup &&
-    (lookup.thread_error ||
-      !hasUsableCustomerText(normalizeThreadMessages(lookup.thread?.email_summary || [], lookup.order_id)));
 
   return (
     <div className="space-y-6">
@@ -182,96 +194,48 @@ export default function OrderLookupPage() {
             internal={lookup.order.internal}
           />
 
-          <div className="executive-card p-5">
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-              CRM Thread API
-            </h3>
-            {lookup.thread_error ? (
-              <p className="text-sm text-[var(--executive-error)]">{lookup.thread_error}</p>
-            ) : (
-              <div className="space-y-2">
-                {normalizeThreadMessages(lookup.thread.email_summary, lookup.order_id).map((m) => (
-                  <div key={m.seq} className="text-sm">
-                    <span className="font-semibold">{m.direction === "in" ? "Customer" : "Us"}:</span>{" "}
-                    {m.text ? (
-                      <MessageText text={m.text} />
-                    ) : (
-                      <span className="italic text-[var(--executive-error)]">
-                        (no text returned by the CRM API for this message)
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           <div className="w-56">
             <LanguageInput value={language} onChange={setLanguage} />
           </div>
 
           {needsManualMessage ? (
-            <div className="executive-card space-y-3 p-5">
-              <label className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                Customer message (optional)
-                {lookup.thread_error
-                  ? " — CRM thread unavailable, type one in if you have it"
-                  : " — CRM API returned no usable text for this thread's messages"}
-              </label>
-              <textarea
-                className="brand-input w-full rounded-lg px-3 py-2 text-sm"
-                rows={3}
-                value={manualMessage}
-                onChange={(e) => setManualMessage(e.target.value)}
-                placeholder="Type it in if you have it, or leave blank to generate a proactive status update from the order facts alone."
-              />
-              <button
-                onClick={handleManualGenerate}
-                disabled={generatingKey === "manual"}
-                className={`brand-button w-full justify-center px-4 py-3.5 text-sm transition-transform duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${
-                  generatingKey === "manual" ? "" : "ai-cta-glow hover:scale-[1.02]"
-                }`}
-              >
-                <Sparkles size={16} className={generatingKey === "manual" ? "animate-spin" : ""} />
-                {generatingKey === "manual" ? "Generating..." : "Generate with AI"}
-              </button>
-
-              {results.manual && (
-                <div className="space-y-3 pt-2">
-                  <div className="executive-card p-5">
-                    <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                      What our AI generated
-                    </h3>
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                      {results.manual.draft_reply}
-                    </p>
-                  </div>
-                  <AnalysisPills analysis={results.manual.analysis} />
-                  <AiContextPanel
-                    context={results.manual.context}
-                    systemPromptVersion={results.manual.system_prompt_version}
-                    reasoning={results.manual.analysis?.reasoning}
-                    policyApplied={results.manual.analysis?.policy_applied}
-                    fieldsUsed={results.manual.analysis?.fields_used}
-                    threadMeta={threadMeta}
-                  />
-                </div>
-              )}
+            <div className="executive-card-soft p-4 text-sm text-[var(--muted)]">
+              {lookup.thread_error
+                ? `CRM thread unavailable: ${lookup.thread_error}`
+                : "The CRM API returned no usable customer message text for this order."}
             </div>
           ) : (
-            <div className="space-y-3">
-              {buildCustomerMessageCases(
-                normalizeThreadMessages(lookup.thread.email_summary, lookup.order_id)
-              ).map((c) => (
-                <CustomerCaseCard
-                  key={c.seq}
-                  customerMessage={c.context.customerMessage}
-                  isGenerating={generatingKey === c.seq}
-                  onGenerate={() => handleGenerate(c.seq, c.context, c.messageDate, c.realReplies)}
-                  result={results[c.seq]}
-                  threadMeta={threadMeta}
-                />
-              ))}
+            <div className="grid gap-4 lg:grid-cols-[3fr_2fr] lg:items-start">
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+                  Conversation
+                </h3>
+                {messages.map((message) => {
+                  const isCustomer = message.direction === "in";
+                  const messageCase = isCustomer ? caseBySeq[message.seq] : null;
+                  const isSelected = isCustomer && selectedSeq === message.seq;
+
+                  return (
+                    <ConversationMessage
+                      key={`${message.direction}-${message.seq}`}
+                      message={message}
+                      relayEmail={lookup.order.internal?.email || null}
+                      selectable={!!messageCase}
+                      isSelected={isSelected}
+                      onClick={() => messageCase && setSelectedSeq(message.seq)}
+                    />
+                  );
+                })}
+              </div>
+
+              <GenerateWithAiPanel
+                selectedCase={selectedCase}
+                selectedResult={selectedResult}
+                isGenerating={isGenerating}
+                onGenerate={handleSelectedGenerate}
+                threadId={threadIdForDrafts}
+                threadMeta={threadMeta}
+              />
             </div>
           )}
         </>

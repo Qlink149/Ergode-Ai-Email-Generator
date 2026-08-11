@@ -97,9 +97,12 @@ export async function generateDraft({
       thread_history: threadHistory || [],
       language: language || null,
       order_facts: orderFacts || null,
-      // Only the ticketing page passes these, so this generation gets
-      // written back to ai_drafts against the thread it belongs to.
-      thread_id: threadId || null,
+      // When set, this generation gets written back to ai_drafts against
+      // the thread/message it belongs to, so a later edit can find it.
+      // Stringified because the CRM Thread API's own thread_id (see
+      // OrderLookupPage.jsx) comes back as a JSON number, and the pipeline's
+      // pydantic model requires a string - a raw number 422s.
+      thread_id: threadId != null ? String(threadId) : null,
       seq: seq != null ? String(seq) : null,
       // From the CRM Thread API's threadMeta - see draft_generator.py's
       // cancellation-interception rule for what these actually mean.
@@ -132,11 +135,24 @@ export async function saveDraftEdit({ threadId, seq, editedReply }) {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      thread_id: threadId,
+      // Stringified for the same reason generateDraft() does it - the CRM
+      // Thread API's own thread_id (OrderLookupPage.jsx) comes back as a
+      // JSON number, and the pipeline's pydantic model requires a string.
+      thread_id: threadId != null ? String(threadId) : null,
       seq: String(seq),
       edited_reply: editedReply,
     }),
   });
+}
+
+/** Translates one message to English for display - returns null if it's already English. */
+export async function translateMessage(text) {
+  const { translated } = await apiFetch("/api/translate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  return translated;
 }
 
 export async function saveSystemPrompt(content) {

@@ -2,6 +2,19 @@ import { useEffect, useState } from "react";
 import { Pencil, Check } from "lucide-react";
 import { saveDraftEdit } from "../api.js";
 
+// The system prompt's MANDATORY OUTPUT FORMAT rule (draft_generator.py) makes
+// the model return "<reply>\n=====\n<same reply in English>" whenever the
+// reply itself isn't in English, so a reviewer who doesn't read that
+// language can still approve it. Split that apart for display instead of
+// showing the raw "=====" separator as if it were part of the email.
+const BILINGUAL_SEPARATOR = /\n=+\n/;
+
+function splitBilingualDraft(text) {
+  const parts = text.split(BILINGUAL_SEPARATOR);
+  if (parts.length !== 2) return { reply: text, translation: null };
+  return { reply: parts[0].trim(), translation: parts[1].trim() };
+}
+
 /**
  * The AI's draft, editable in place. "Edit" swaps to a textarea seeded
  * with the current text; "Save" writes the edit back to ai_drafts
@@ -72,7 +85,22 @@ export default function EditableDraft({ threadId, seq, draftReply }) {
           </button>
         </div>
       ) : (
-        <p className="whitespace-pre-wrap text-sm leading-relaxed">{text}</p>
+        (() => {
+          const { reply, translation } = splitBilingualDraft(text);
+          return (
+            <>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">{reply}</p>
+              {translation && (
+                <div className="mt-3 rounded-lg border border-[rgb(var(--violet-rgb)/0.15)] bg-[rgb(var(--violet-rgb)/0.04)] p-2.5">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--violet)]">
+                    English translation
+                  </p>
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{translation}</p>
+                </div>
+              )}
+            </>
+          );
+        })()
       )}
     </div>
   );

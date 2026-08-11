@@ -75,6 +75,12 @@ sounds angry or frustrated, the draft promises a refund, replacement, or
 compensation, the draft responds to a dispute (e.g. "delivered but not
 received"), or your own confidence is below 0.7. Otherwise set it to false.
 
+Write "reasoning", "fields_used", and "policy_applied" in English ALWAYS,
+even if the customer's message and the draft reply are in another language.
+This analysis is read by an English-speaking reviewer, not the customer -
+it is never translated or shown to them, so it should never switch language
+to match the reply.
+
 Return ONLY the JSON object, no other text.
 """
 
