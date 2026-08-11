@@ -30,7 +30,8 @@ from openai import OpenAI
 
 from auth_token import verify_token
 from config import OPENAI_API_KEY, require_openai_key
-from draft_generator import generate_draft, load_system_prompt, save_system_prompt, get_system_prompt_version
+from draft_generator import generate_draft
+from system_prompt_store import load_system_prompt, save_system_prompt, get_system_prompt_version
 from analysis import analyze_message
 from draft_store import save_draft, save_draft_edit
 
@@ -100,6 +101,14 @@ class GenerateRequest(BaseModel):
     order_facts: Optional[OrderFacts] = None  # real, verified data from the Order API
     thread_id: Optional[str] = None  # if set, this generation is saved to ai_drafts
     seq: Optional[str] = None  # a message seq (as a string) or "latest"
+    # From the CRM Thread API (server/routes/tickets.js's threadMeta) - per
+    # Ergode's own team, this reflects the live agent/customer transaction
+    # and takes priority over order_facts when the two disagree.
+    # cancellation_marked specifically means "an interception attempt with
+    # the fulfillment partner is in progress", not "the order is
+    # cancelled" - see the system prompt's cancellation-in-progress rule.
+    cancellation_marked: Optional[bool] = None
+    thread_reason: Optional[str] = None
 
 
 class GenerateResponse(BaseModel):
@@ -122,6 +131,8 @@ def generate(payload: GenerateRequest):
         "thread_history": [entry.model_dump() for entry in payload.thread_history],
         "language": payload.language,
         "order_facts": payload.order_facts.model_dump() if payload.order_facts else None,
+        "cancellation_marked": payload.cancellation_marked,
+        "thread_reason": payload.thread_reason,
     }
 
     draft = generate_draft(context, client=client)

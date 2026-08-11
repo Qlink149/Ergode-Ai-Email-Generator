@@ -42,7 +42,7 @@ export default function AiContextPanel({ context, systemPromptVersion, threadMet
           {threadMeta && (
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                CRM thread metadata (reference only - NOT sent to the AI)
+                CRM thread metadata
               </p>
               <ul className="mt-1 space-y-0.5">
                 <li>Thread reason: {threadMeta.thread_reason || "none"}</li>
@@ -53,8 +53,11 @@ export default function AiContextPanel({ context, systemPromptVersion, threadMet
                 </li>
               </ul>
               <p className="mt-1 text-xs text-[var(--muted)]">
-                These fields have already disagreed with what the real conversation shows on other
-                threads this session - shown for your own judgment, not used as a fact by the AI.
+                Per Ergode: this reflects the live agent/customer transaction and takes priority over
+                order status when they disagree. Cancellation marked = an interception attempt with our
+                fulfillment partner is in progress, not a confirmed cancellation (~90% success, not
+                guaranteed) - sent to the AI along with thread reason; see the system prompt's
+                cancellation-interception rule.
               </p>
             </div>
           )}

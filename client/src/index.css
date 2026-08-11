@@ -63,6 +63,20 @@ html {
   font-size: 17px;
 }
 
+@keyframes ai-cta-glow {
+  0%,
+  100% {
+    box-shadow: 0 4px 16px rgb(var(--violet-rgb) / 0.22);
+  }
+  50% {
+    box-shadow: 0 4px 28px rgb(var(--violet-rgb) / 0.42);
+  }
+}
+
+.ai-cta-glow {
+  animation: ai-cta-glow 2.4s ease-in-out infinite;
+}
+
 body {
   margin: 0;
   min-width: 0;

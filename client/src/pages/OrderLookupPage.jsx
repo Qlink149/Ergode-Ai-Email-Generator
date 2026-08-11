@@ -1,11 +1,14 @@
 import { useState } from "react";
-import { Search, Sparkles, ShieldAlert } from "lucide-react";
+import { Search, Sparkles } from "lucide-react";
 import { fetchOrderLookup, generateDraft } from "../api.js";
 import LanguageInput from "../components/LanguageInput.jsx";
 import MessageText from "../components/MessageText.jsx";
+import OrderDetailsGrid from "../components/OrderDetailsGrid.jsx";
 import AnalysisPills from "../components/AnalysisPills.jsx";
 import AiContextPanel from "../components/AiContextPanel.jsx";
+import CustomerCaseCard from "../components/CustomerCaseCard.jsx";
 import { buildCustomerMessageCases } from "../threadPairing.js";
+import { dateGateOrderFacts } from "../orderFacts.js";
 
 /**
  * OrderLookupPage.jsx
@@ -40,46 +43,9 @@ function normalizeThreadMessages(emailSummary, orderId) {
     }));
 }
 
-/** Strips order facts that weren't true yet as of the given message date - a reply from before a refund shouldn't see that refund. Same logic as TicketDetail.jsx. */
-function dateGateOrderFacts(facts, messageDate) {
-  if (!facts || !messageDate) return facts;
-  const asOf = new Date(messageDate);
-  const gated = { ...facts };
-
-  const shippedDate = facts.shipped_date ? new Date(facts.shipped_date) : null;
-  if (shippedDate && asOf < shippedDate) {
-    gated.carrier_name = null;
-    gated.tracking_id = null;
-    gated.tracking_url = null;
-    gated.ship_method = null;
-    gated.shipped_date = null;
-    gated.customer_tracking_status = null;
-    gated.last_mile_carrier = null;
-    gated.last_mile_tracking = null;
-  }
-
-  const refundDate = facts.refund_date ? new Date(facts.refund_date) : null;
-  if (refundDate && asOf < refundDate) {
-    gated.customer_refund_amount = null;
-    gated.refund_date = null;
-  }
-
-  return gated;
-}
-
 /** True if at least one inbound message actually has usable text. */
 function hasUsableCustomerText(messages) {
   return messages.some((m) => m.direction === "in" && m.text);
-}
-
-function FactRow({ label, value }) {
-  if (!value) return null;
-  return (
-    <div className="flex justify-between gap-4 py-1 text-sm">
-      <span className="text-[var(--muted)]">{label}</span>
-      <span className="text-right font-medium">{value}</span>
-    </div>
-  );
 }
 
 export default function OrderLookupPage() {
@@ -114,6 +80,16 @@ export default function OrderLookupPage() {
   // No internal_status_note (reasoning_status) - same as TicketDetail.jsx,
   // proven unreliable against real threads, never sent to the AI.
   const orderFacts = lookup ? { ...lookup.order.customer_safe } : null;
+  // Same shape TicketDetail.jsx passes to AiContextPanel - shown in the "Show AI
+  // context" panel so thread_reason/cancellation_marked are visible there too,
+  // not just sent silently to the model.
+  const threadMeta = lookup?.thread
+    ? {
+        thread_reason: lookup.thread.thread_reason ?? null,
+        cancellation_marked: lookup.thread.cancellation_marked ?? null,
+        order_details: lookup.thread.order_details ?? [],
+      }
+    : null;
 
   async function handleGenerate(key, context, messageDate, realReplies) {
     setGeneratingKey(key);
@@ -122,11 +98,17 @@ export default function OrderLookupPage() {
       // Only the customer's own prior messages - agent replies are excluded
       // from history, same as TicketDetail.jsx.
       const customerOnlyHistory = context.threadHistory.filter((m) => m.direction === "in");
+      // Only date-gate messages that already have a real reply on record (historical,
+      // used for comparison) - a message still awaiting a reply is being drafted today,
+      // so today's facts apply, same as TicketDetail.jsx.
+      const messageDateForGating = realReplies?.length > 0 ? messageDate : null;
       const response = await generateDraft({
         ...context,
         threadHistory: customerOnlyHistory,
-        orderFacts: dateGateOrderFacts(orderFacts, messageDate),
+        orderFacts: dateGateOrderFacts(orderFacts, messageDateForGating),
         language,
+        cancellationMarked: lookup?.thread?.cancellation_marked,
+        threadReason: lookup?.thread?.thread_reason,
       });
       setResults((prev) => ({ ...prev, [key]: { ...response, realReplies } }));
     } catch (err) {
@@ -194,54 +176,34 @@ export default function OrderLookupPage() {
 
       {lookup && (
         <>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="executive-card p-5">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                Order API — customer-safe facts
-              </h3>
-              <FactRow label="Recipient" value={lookup.order.customer_safe.recipient_name} />
-              <FactRow label="Product" value={lookup.order.customer_safe.product_name} />
-              <FactRow label="Carrier" value={lookup.order.customer_safe.carrier_name} />
-              <FactRow label="Tracking #" value={lookup.order.customer_safe.tracking_id} />
-              <FactRow label="Shipped" value={lookup.order.customer_safe.shipped_date} />
-              <FactRow label="Purchased" value={lookup.order.customer_safe.purchase_date} />
-              <FactRow
-                label="Latest carrier status"
-                value={lookup.order.customer_safe.customer_tracking_status || "no scan on file"}
-              />
+          <OrderDetailsGrid
+            orderId={lookup.order_id}
+            customerSafe={lookup.order.customer_safe}
+            internal={lookup.order.internal}
+          />
 
-              <div className="mt-4 flex items-start gap-2 rounded-xl bg-[rgb(var(--navy-rgb)/0.04)] p-3 text-xs text-[var(--muted)]">
-                <ShieldAlert size={14} className="mt-0.5 shrink-0" />
-                <span>
-                  Internal-only fields (status code, internal order id) and supplier/seller data
-                  are deliberately not shown here or sent to the AI — see disclosureClassifier.js.
-                </span>
+          <div className="executive-card p-5">
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+              CRM Thread API
+            </h3>
+            {lookup.thread_error ? (
+              <p className="text-sm text-[var(--executive-error)]">{lookup.thread_error}</p>
+            ) : (
+              <div className="space-y-2">
+                {normalizeThreadMessages(lookup.thread.email_summary, lookup.order_id).map((m) => (
+                  <div key={m.seq} className="text-sm">
+                    <span className="font-semibold">{m.direction === "in" ? "Customer" : "Us"}:</span>{" "}
+                    {m.text ? (
+                      <MessageText text={m.text} />
+                    ) : (
+                      <span className="italic text-[var(--executive-error)]">
+                        (no text returned by the CRM API for this message)
+                      </span>
+                    )}
+                  </div>
+                ))}
               </div>
-            </div>
-
-            <div className="executive-card p-5">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                CRM Thread API
-              </h3>
-              {lookup.thread_error ? (
-                <p className="text-sm text-[var(--executive-error)]">{lookup.thread_error}</p>
-              ) : (
-                <div className="space-y-2">
-                  {normalizeThreadMessages(lookup.thread.email_summary, lookup.order_id).map((m) => (
-                    <div key={m.seq} className="text-sm">
-                      <span className="font-semibold">{m.direction === "in" ? "Customer" : "Us"}:</span>{" "}
-                      {m.text ? (
-                        <MessageText text={m.text} />
-                      ) : (
-                        <span className="italic text-[var(--executive-error)]">
-                          (no text returned by the CRM API for this message)
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
           </div>
 
           <div className="w-56">
@@ -266,9 +228,11 @@ export default function OrderLookupPage() {
               <button
                 onClick={handleManualGenerate}
                 disabled={generatingKey === "manual"}
-                className="brand-button px-5 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                className={`brand-button w-full justify-center px-4 py-3.5 text-sm transition-transform duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${
+                  generatingKey === "manual" ? "" : "ai-cta-glow hover:scale-[1.02]"
+                }`}
               >
-                <Sparkles size={16} />
+                <Sparkles size={16} className={generatingKey === "manual" ? "animate-spin" : ""} />
                 {generatingKey === "manual" ? "Generating..." : "Generate with AI"}
               </button>
 
@@ -287,6 +251,7 @@ export default function OrderLookupPage() {
                     context={results.manual.context}
                     systemPromptVersion={results.manual.system_prompt_version}
                     reasoning={results.manual.analysis?.reasoning}
+                    threadMeta={threadMeta}
                   />
                 </div>
               )}
@@ -295,62 +260,16 @@ export default function OrderLookupPage() {
             <div className="space-y-3">
               {buildCustomerMessageCases(
                 normalizeThreadMessages(lookup.thread.email_summary, lookup.order_id)
-              ).map((c) => {
-                const result = results[c.seq];
-                const isGenerating = generatingKey === c.seq;
-                return (
-                  <div key={c.seq} className="executive-card-soft p-4">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
-                      Customer message
-                    </p>
-                    <MessageText text={c.context.customerMessage} />
-
-                    <button
-                      onClick={() => handleGenerate(c.seq, c.context, c.messageDate, c.realReplies)}
-                      disabled={isGenerating}
-                      className="brand-button-ghost mt-3 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Sparkles size={13} />
-                      {isGenerating ? "Generating..." : "Generate with AI"}
-                    </button>
-
-                    {result && (
-                      <div className="mt-3 space-y-3">
-                        <div className="grid gap-4 md:grid-cols-2">
-                          {result.realReplies?.length > 0 && (
-                            <div className="executive-card p-5">
-                              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                                What was actually sent (CRM)
-                              </h3>
-                              <div className="space-y-3">
-                                {result.realReplies.map((text, i) => (
-                                  <p key={i} className="whitespace-pre-wrap text-sm leading-relaxed">
-                                    {text}
-                                  </p>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          <div className="executive-card p-5">
-                            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                              What our AI generated
-                            </h3>
-                            <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                              {result.draft_reply}
-                            </p>
-                          </div>
-                        </div>
-                        <AnalysisPills analysis={result.analysis} />
-                        <AiContextPanel
-                          context={result.context}
-                          systemPromptVersion={result.system_prompt_version}
-                          reasoning={result.analysis?.reasoning}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              ).map((c) => (
+                <CustomerCaseCard
+                  key={c.seq}
+                  customerMessage={c.context.customerMessage}
+                  isGenerating={generatingKey === c.seq}
+                  onGenerate={() => handleGenerate(c.seq, c.context, c.messageDate, c.realReplies)}
+                  result={results[c.seq]}
+                  threadMeta={threadMeta}
+                />
+              ))}
             </div>
           )}
         </>

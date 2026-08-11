@@ -2,7 +2,6 @@
 
 const express = require("express");
 const { getDb } = require("../db");
-const { readRawMessages } = require("../services/rawEmailReader");
 
 const router = express.Router();
 
@@ -18,11 +17,14 @@ router.get("/", async (req, res) => {
         order_id: t.order_id,
         product_name: t.order.customer_safe.product_name,
         recipient_name: t.order.customer_safe.recipient_name,
+        marketplace: t.order.customer_safe.marketplace,
+        thread_reason: t.threadMeta?.thread_reason || null,
         message_count: t.messages.length,
         status: last.direction === "in" ? "awaiting_reply" : "responded",
         has_relay: t.messages.some((m) => m.is_relay),
         last_message_direction: last.direction,
         last_message_preview: (last.text || "").slice(0, 140),
+        last_message_time: last.created_time || null,
       };
     });
 
@@ -52,16 +54,6 @@ router.get("/:threadId", async (req, res) => {
     });
   } catch (err) {
     res.status(502).json({ error: `Could not load thread: ${err.message}` });
-  }
-});
-
-/** The original raw Amazon-branded email HTML for this thread, if we have it on disk - display only. */
-router.get("/:threadId/raw-messages", (req, res) => {
-  try {
-    const messages = readRawMessages(req.params.threadId);
-    res.json({ found: messages !== null, messages: messages || [] });
-  } catch (err) {
-    res.status(500).json({ error: `Could not read raw email files: ${err.message}` });
   }
 });
 

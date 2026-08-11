@@ -2,7 +2,7 @@
 context_builder.py
 -------------------
 Builds the "briefing note" the AI sees before it writes a reply - and
-nothing more than that. See draft_generator.py's load_system_prompt()
+nothing more than that. See system_prompt_store.py's load_system_prompt()
 (MongoDB "system_prompts" collection) for the writing rules; this file
 only assembles the facts.
 

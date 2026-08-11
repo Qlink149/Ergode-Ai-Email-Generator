@@ -4,63 +4,24 @@ draft_generator.py
 Sends a context package (the "briefing note" built by context_builder.py)
 to OpenAI and gets back a draft reply, written in Ergode's voice.
 
-The system prompt (tone, templates, rules) is read fresh from MongoDB's
-"system_prompts" collection on every call, not cached - so editing it from
-the System Prompt page in the UI takes effect on the very next generation,
-with no restart needed. Only the facts specific to one reply - the
+The system prompt (tone, templates, rules) comes from system_prompt_store.py,
+read fresh from MongoDB on every call, not cached - so editing it from the
+System Prompt page in the UI takes effect on the very next generation, with
+no restart needed. Only the facts specific to one reply - the
 customer's message, the thread history, the order id - go into the user
 turn. That split is deliberate: it is exactly what a production system
 does, and it is why swapping in real order/CRM data later only changes
 format_user_prompt(), not this file's structure.
 """
 
-import re
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Optional
 
 from openai import BadRequestError, OpenAI
 
-from config import OPENAI_API_KEY, OPENAI_MODEL, SYSTEM_PROMPT_SEED_PATH, require_openai_key
-from db import get_db
-
-
-def load_system_prompt() -> str:
-    """
-    Read the current system prompt, fresh every call - see module docstring.
-
-    The first time the "system_prompts" collection is empty (a fresh
-    database), this seeds it from system_prompt_seed.md as version 1, so
-    a new deployment boots with the real prompt instead of an error.
-    """
-    collection = get_db()["system_prompts"]
-    latest = collection.find_one({}, sort=[("version", -1)])
-
-    if latest is None:
-        seed_content = SYSTEM_PROMPT_SEED_PATH.read_text(encoding="utf-8")
-        collection.insert_one(
-            {"version": 1, "content": seed_content, "updated_at": datetime.now(timezone.utc)}
-        )
-        return seed_content
-
-    return latest["content"]
-
-
-def get_system_prompt_version() -> int:
-    """The version number currently active - shown in the UI so a viewer can see which prompt produced a given draft."""
-    collection = get_db()["system_prompts"]
-    latest = collection.find_one({}, sort=[("version", -1)], projection={"version": 1})
-    return latest["version"] if latest else 0
-
-
-def save_system_prompt(content: str) -> int:
-    """Save an edit as a new version - every past version is kept, none overwritten."""
-    collection = get_db()["system_prompts"]
-    latest = collection.find_one({}, sort=[("version", -1)])
-    next_version = (latest["version"] + 1) if latest else 1
-    collection.insert_one(
-        {"version": next_version, "content": content, "updated_at": datetime.now(timezone.utc)}
-    )
-    return next_version
+from config import OPENAI_API_KEY, OPENAI_MODEL, require_openai_key
+from draft_sanitizer import sanitize_draft
+from system_prompt_store import load_system_prompt
 
 
 def _fmt_money(value) -> str:
@@ -133,31 +94,16 @@ def format_order_facts(order_facts: dict) -> List[str]:
             f"relevant to what the customer asked."
         )
 
+    # Only ever mention carrier status when a real value exists - saying
+    # anything about it being absent ("none on file", "no scan yet") gave
+    # the model language to echo into replies as if it were meaningful,
+    # which it isn't. When there's nothing, say nothing; the model still
+    # has shipped_date/tracking_id/promised_delivery_date above to reason
+    # from, and Section 5's scenario guidance already covers what to write
+    # based on those.
     status = order_facts.get("customer_tracking_status")
-    has_label = bool(order_facts.get("shipped_date") or order_facts.get("tracking_id"))
     if status:
         lines.append(f"- Latest carrier status: \"{status}\"")
-    elif order_is_settled:
-        lines.append(
-            "- Latest carrier status: none on file. This is expected, not a "
-            "concern - see the internal order status note below, which "
-            "already explains why."
-        )
-    elif has_label:
-        lines.append(
-            "- Latest carrier status: none on file - a shipping label/number "
-            "exists but the carrier has not logged a first scan yet. Treat "
-            "this as a fulfilment concern to escalate internally, not a "
-            "normal in-transit delay - do not tell the customer to simply "
-            "wait longer for tracking to update."
-        )
-    else:
-        lines.append(
-            "- No shipping label has been created yet and no tracking number "
-            "exists - the order has not shipped. Do not say a label \"exists\" "
-            "or that a scan is merely missing; say plainly that it hasn't "
-            "shipped yet."
-        )
 
     if order_is_settled:
         lines.append(
@@ -196,6 +142,11 @@ def format_user_prompt(context: dict) -> str:
     order_facts = context.get("order_facts")
     if order_facts:
         lines.extend(format_order_facts(order_facts))
+
+    if context.get("cancellation_marked"):
+        lines.append("- CRM cancellation-interception flag: set")
+    if context.get("thread_reason"):
+        lines.append(f"- CRM thread category: {context['thread_reason']}")
 
     if context["is_relay"]:
         lines.append(
@@ -301,29 +252,6 @@ def format_user_prompt(context: dict) -> str:
     return "\n".join(lines)
 
 
-def _sanitize_draft(text: str) -> str:
-    """
-    A deterministic safety net behind the "plain text, no markdown, don't
-    quote-wrap the whole reply" prompt instruction - that instruction alone
-    has been seen not holding 100% of the time, so this guarantees it
-    regardless of what the model actually did.
-    """
-    text = text.strip()
-
-    # A reply the model wrapped entirely in quotes, e.g. "Dear ...\n...\nRegards, X"
-    if len(text) > 1 and text[0] == '"' and text[-1] == '"':
-        text = text[1:-1].strip()
-
-    # **bold** -> bold (keep the words, drop the markdown)
-    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
-    # Stray leftover single/double asterisks used as markdown emphasis or bullets
-    text = re.sub(r"\*+", "", text)
-    # "# Heading" -> "Heading" at the start of a line
-    text = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)
-
-    return text.strip()
-
-
 def generate_draft(context: dict, client: Optional[OpenAI] = None) -> str:
     """
     Call OpenAI with the system prompt + this case's context, return the
@@ -350,4 +278,4 @@ def generate_draft(context: dict, client: Optional[OpenAI] = None) -> str:
             raise
         response = client.chat.completions.create(model=OPENAI_MODEL, messages=messages)
 
-    return _sanitize_draft(response.choices[0].message.content)
+    return sanitize_draft(response.choices[0].message.content)

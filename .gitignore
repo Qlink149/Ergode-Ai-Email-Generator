@@ -20,7 +20,3 @@ categorizations.zip
 
 # Architecture diagrams - local reference only, not part of the repo
 *.drawio
-
-# Raw Amazon email HTML dumps (151k+ files) - local reference data for the
-# "original Amazon message" panel, never meant to be committed
-email_bodyies/

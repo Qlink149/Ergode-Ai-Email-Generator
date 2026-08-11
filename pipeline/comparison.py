@@ -34,7 +34,7 @@ DATE_PATTERN = re.compile(
 
 # --- Category keywords ----------------------------------------------------
 # Matches the scenario templates (A-K) in the system prompt (MongoDB
-# "system_prompts" collection - see draft_generator.py's load_system_prompt()).
+# "system_prompts" collection - see system_prompt_store.py's load_system_prompt()).
 # Simple and deliberately readable: first category with a keyword hit wins -
 # which is exactly why order matters here. More specific signals are listed
 # before more generic ones that tend to appear inside them too (e.g. a

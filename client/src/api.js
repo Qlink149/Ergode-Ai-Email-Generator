@@ -84,6 +84,8 @@ export async function generateDraft({
   orderFacts,
   threadId,
   seq,
+  cancellationMarked,
+  threadReason,
 }) {
   return apiFetch("/api/generate", {
     method: "POST",
@@ -99,6 +101,10 @@ export async function generateDraft({
       // written back to ai_drafts against the thread it belongs to.
       thread_id: threadId || null,
       seq: seq != null ? String(seq) : null,
+      // From the CRM Thread API's threadMeta - see draft_generator.py's
+      // cancellation-interception rule for what these actually mean.
+      cancellation_marked: cancellationMarked ?? null,
+      thread_reason: threadReason || null,
     }),
   });
 }
@@ -118,11 +124,6 @@ export async function fetchTickets() {
 
 export async function fetchTicketThread(threadId) {
   return apiFetch(`/api/tickets/${threadId}`);
-}
-
-/** The original raw Amazon-branded email HTML for this thread, if we have it on disk. */
-export async function fetchRawMessages(threadId) {
-  return apiFetch(`/api/tickets/${threadId}/raw-messages`);
 }
 
 /** Save a human edit to a previously generated draft. */
