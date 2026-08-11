@@ -7,7 +7,14 @@ import { ChevronDown, ChevronRight } from "lucide-react";
  * reference-only, never sent to the AI - it's been unreliable in testing.
  * Shared by TicketDetail.jsx and OrderLookupPage.jsx.
  */
-export default function AiContextPanel({ context, systemPromptVersion, threadMeta, reasoning }) {
+export default function AiContextPanel({
+  context,
+  systemPromptVersion,
+  threadMeta,
+  reasoning,
+  policyApplied,
+  fieldsUsed = [],
+}) {
   const [open, setOpen] = useState(false);
   const facts = context.order_facts;
 
@@ -23,12 +30,36 @@ export default function AiContextPanel({ context, systemPromptVersion, threadMet
 
       {open && (
         <div className="mt-3 space-y-4">
-          {reasoning && (
+          {(reasoning || policyApplied || fieldsUsed.length > 0) && (
             <div className="rounded-xl border border-[rgb(var(--violet-rgb)/0.18)] bg-[rgb(var(--violet-rgb)/0.05)] p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-[var(--violet)]">
                 Why this reply
               </p>
-              <p className="mt-1">{reasoning}</p>
+              {reasoning && <p className="mt-1">{reasoning}</p>}
+
+              {policyApplied && (
+                <div className="mt-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                    Policy applied
+                  </p>
+                  <p className="mt-0.5">{policyApplied}</p>
+                </div>
+              )}
+
+              {fieldsUsed.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+                    Fields used for this reply
+                  </p>
+                  <ul className="mt-1 flex flex-wrap gap-1.5">
+                    {fieldsUsed.map((field, i) => (
+                      <li key={i} className="pill pill-neutral">
+                        {field}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 

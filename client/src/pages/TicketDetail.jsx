@@ -224,6 +224,8 @@ export default function TicketDetail({ threadId, onBack }) {
                       systemPromptVersion={selectedResult.system_prompt_version}
                       threadMeta={threadMeta}
                       reasoning={selectedResult.analysis?.reasoning}
+                      policyApplied={selectedResult.analysis?.policy_applied}
+                      fieldsUsed={selectedResult.analysis?.fields_used}
                     />
                   </div>
                 )}

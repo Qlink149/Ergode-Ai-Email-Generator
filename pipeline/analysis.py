@@ -48,6 +48,27 @@ JSON object with exactly these fields:
   Do not write a generic restatement of what a support reply does ("it
   addresses the customer's concern professionally") - every sentence
   should reference something specific and real from this exact case.
+- "fields_used": an array of short strings, each one naming a specific
+  order fact or CRM field that was actually drawn on to write this reply,
+  with its real value (e.g. "shipped_date: 2025-12-20 07:59:59",
+  "carrier_name: FEDEX", "customer_refund_amount: $189.65",
+  "thread_reason: Refund"). Only include fields that materially shaped
+  what the reply says - not every field that happened to be available.
+  Empty array if the reply didn't rely on any specific fact (e.g. a
+  generic acknowledgment).
+- "policy_applied": one short, specific sentence naming the exact policy,
+  template, or skill from the system prompt that justifies this reply's
+  approach. If the reply mentions or implies any refund, replacement, or
+  compensation, this MUST name the specific policy that authorizes it
+  (e.g. "19% restocking fee applies - Buyer Remorse return, per the
+  return-reason table" or "Full refund, no restocking fee - our
+  fulfillment error, not the customer's return" or "Refunding now, not
+  claiming it's already issued - no refund_date on file yet"). If no
+  refund/compensation is involved, name whichever category/template did
+  apply (e.g. "Category F - shipping delay, tracking exists and is
+  progressing normally" or "Proactive status update - no customer message
+  to answer"). Never leave this vague ("standard policy") - name the
+  actual rule.
 
 Set needs_human_review to true whenever any of these apply: the customer
 sounds angry or frustrated, the draft promises a refund, replacement, or
@@ -66,6 +87,8 @@ _FALLBACK_RESULT = {
     "needs_human_review": True,
     "review_reason": "Analysis could not be parsed - defaulting to human review.",
     "reasoning": "Could not be determined - analysis failed to parse.",
+    "fields_used": [],
+    "policy_applied": "Could not be determined - analysis failed to parse.",
 }
 
 

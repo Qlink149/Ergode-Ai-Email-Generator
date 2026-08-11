@@ -56,6 +56,8 @@ export default function CustomerCaseCard({ customerMessage, isGenerating, onGene
             context={result.context}
             systemPromptVersion={result.system_prompt_version}
             reasoning={result.analysis?.reasoning}
+            policyApplied={result.analysis?.policy_applied}
+            fieldsUsed={result.analysis?.fields_used}
             threadMeta={threadMeta}
           />
         </div>

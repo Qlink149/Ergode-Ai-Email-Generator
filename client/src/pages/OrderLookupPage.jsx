@@ -251,6 +251,8 @@ export default function OrderLookupPage() {
                     context={results.manual.context}
                     systemPromptVersion={results.manual.system_prompt_version}
                     reasoning={results.manual.analysis?.reasoning}
+                    policyApplied={results.manual.analysis?.policy_applied}
+                    fieldsUsed={results.manual.analysis?.fields_used}
                     threadMeta={threadMeta}
                   />
                 </div>
