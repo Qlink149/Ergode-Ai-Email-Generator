@@ -15,6 +15,7 @@ export default function GenerateWithAiPanel({
   selectedResult,
   isGenerating,
   onGenerate,
+  orderId,
   threadId,
   threadMeta,
 }) {
@@ -51,9 +52,11 @@ export default function GenerateWithAiPanel({
               {/* What was actually sent (CRM) is deliberately not repeated here - it's
                   already visible in the conversation on the left, no need to duplicate it. */}
               <EditableDraft
+                orderId={orderId}
                 threadId={threadId}
                 seq={String(selectedCase.seq)}
                 draftReply={selectedResult.draft_reply}
+                customerMessage={selectedCase.context.customerMessage}
               />
               <AnalysisPills analysis={selectedResult.analysis} />
               <AiContextPanel

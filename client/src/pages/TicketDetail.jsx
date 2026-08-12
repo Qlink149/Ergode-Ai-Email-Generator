@@ -144,6 +144,7 @@ export default function TicketDetail({ threadId, onBack }) {
             selectedResult={selectedResult}
             isGenerating={isGenerating}
             onGenerate={handleGenerate}
+            orderId={orderId}
             threadId={threadId}
             threadMeta={threadMeta}
           />

@@ -155,6 +155,33 @@ export async function translateMessage(text) {
   return translated;
 }
 
+/**
+ * Post a comment against an order id, optionally tied to a specific
+ * customer message (seq) with a snapshot of what that message and the AI's
+ * reply said - captured at post time, so anyone reading the comment later
+ * doesn't have to regenerate the draft or re-look-up the order to see what
+ * it was about.
+ */
+export async function postComment({ orderId, author, text, seq, customerMessage, aiReply }) {
+  return apiFetch("/api/comments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      order_id: orderId,
+      author,
+      text,
+      seq: seq != null ? String(seq) : null,
+      customer_message: customerMessage || null,
+      ai_reply: aiReply || null,
+    }),
+  });
+}
+
+/** Every comment left against any order, newest first. */
+export async function fetchRecentComments() {
+  return apiFetch("/api/comments/recent");
+}
+
 export async function saveSystemPrompt(content) {
   return apiFetch("/api/system-prompt", {
     method: "PUT",

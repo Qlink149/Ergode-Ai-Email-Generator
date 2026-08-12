@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, MessageSquare } from "lucide-react";
 import { fetchOrderLookup, generateDraft } from "../api.js";
 import LanguageInput from "../components/LanguageInput.jsx";
 import ConversationMessage from "../components/ConversationMessage.jsx";
 import OrderDetailsGrid from "../components/OrderDetailsGrid.jsx";
 import GenerateWithAiPanel from "../components/GenerateWithAiPanel.jsx";
+import CommentsSidebar from "../components/CommentsSidebar.jsx";
 import { buildCustomerMessageCases } from "../threadPairing.js";
 import { dateGateOrderFacts } from "../orderFacts.js";
 
@@ -58,6 +59,7 @@ export default function OrderLookupPage() {
   const [error, setError] = useState(null);
   // Which customer message the right-hand panel is currently showing.
   const [selectedSeq, setSelectedSeq] = useState(null);
+  const [commentsOpen, setCommentsOpen] = useState(false);
 
   async function handleLookup() {
     if (!orderIdInput.trim()) return;
@@ -160,8 +162,8 @@ export default function OrderLookupPage() {
         </p>
       </div>
 
-      <div className="executive-card flex flex-wrap items-end gap-3 p-5">
-        <div className="min-w-[260px] flex-1">
+      <div className="executive-card flex flex-wrap items-end gap-3 p-4">
+        <div className="min-w-[220px] flex-1">
           <label className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
             Order ID
           </label>
@@ -175,10 +177,17 @@ export default function OrderLookupPage() {
         <button
           onClick={handleLookup}
           disabled={loading || !orderIdInput.trim()}
-          className="brand-button px-5 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          className="brand-button px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Search size={16} />
           {loading ? "Looking up..." : "Look Up"}
+        </button>
+        <button
+          onClick={() => setCommentsOpen(true)}
+          className="brand-button-ghost px-4 py-2 text-sm"
+        >
+          <MessageSquare size={16} />
+          Comments
         </button>
       </div>
 
@@ -233,6 +242,7 @@ export default function OrderLookupPage() {
                 selectedResult={selectedResult}
                 isGenerating={isGenerating}
                 onGenerate={handleSelectedGenerate}
+                orderId={lookup.order_id}
                 threadId={threadIdForDrafts}
                 threadMeta={threadMeta}
               />
@@ -240,6 +250,8 @@ export default function OrderLookupPage() {
           )}
         </>
       )}
+
+      <CommentsSidebar isOpen={commentsOpen} onClose={() => setCommentsOpen(false)} />
     </div>
   );
 }

@@ -177,6 +177,29 @@ h6 {
   z-index: 0;
 }
 
+/* Same soft-gradient language as .executive-shell::before/.exec-blob-mid,
+   but sized and positioned for a contained panel (e.g. CommentsSidebar.jsx's
+   header) rather than the full viewport - position: absolute within a
+   position: relative, overflow: hidden ancestor, not position: fixed. */
+.panel-blob {
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  top: -220px;
+  right: -140px;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    rgb(var(--lavender-rgb) / 0.38) 0%,
+    rgb(var(--violet-rgb) / 0.2) 45%,
+    transparent 70%
+  );
+  filter: blur(45px);
+  animation: blobDrift1 26s ease-in-out infinite;
+  z-index: 0;
+}
+
 .exec-blob-mid {
   position: fixed;
   width: 750px;
