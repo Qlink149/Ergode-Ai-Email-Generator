@@ -48,20 +48,8 @@ export default function GenerateWithAiPanel({
 
           {selectedResult && (
             <div className="space-y-3">
-              {selectedCase.realReplies.length > 0 && (
-                <div className="executive-card p-5">
-                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                    What was actually sent (CRM)
-                  </h3>
-                  <div className="space-y-3">
-                    {selectedCase.realReplies.map((text, i) => (
-                      <p key={i} className="whitespace-pre-wrap text-sm leading-relaxed">
-                        {text}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/* What was actually sent (CRM) is deliberately not repeated here - it's
+                  already visible in the conversation on the left, no need to duplicate it. */}
               <EditableDraft
                 threadId={threadId}
                 seq={String(selectedCase.seq)}

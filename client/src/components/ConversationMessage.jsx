@@ -9,9 +9,9 @@ import { translateMessage } from "../api.js";
  * block (From:/To: header with the real relay address, timestamp,
  * direction-colored background) instead of two different layouts.
  *
- * Customer messages get an on-demand "Translate" toggle - a real OpenAI
- * call, so it only fires on click, never automatically for every message
- * on page load.
+ * Every message (customer or agent/CRM) gets an on-demand "Translate"
+ * toggle - a real OpenAI call, so it only fires on click, never
+ * automatically for every message on page load.
  */
 export default function ConversationMessage({ message, relayEmail, selectable, isSelected, onClick }) {
   const [translated, setTranslated] = useState(null);
@@ -74,7 +74,7 @@ export default function ConversationMessage({ message, relayEmail, selectable, i
         </span>
       )}
 
-      {isCustomer && message.text && (
+      {message.text && (
         <div className="mt-2">
           <button
             onClick={handleTranslate}
