@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, MessageSquareText } from "lucide-react";
 import { fetchRecentComments } from "../api.js";
+import AiContextPanel from "./AiContextPanel.jsx";
 
 /**
  * CommentsSidebar.jsx
@@ -11,9 +12,11 @@ import { fetchRecentComments } from "../api.js";
  * comment ever left, across every order, newest first. Posting a new
  * comment happens from EditableDraft.jsx's "Comment" button instead,
  * right next to "Edit" on a generated draft - which is also where a
- * comment's customer-message/AI-reply snapshot comes from, so each card
- * here is self-contained (no need to regenerate a draft or re-look-up the
- * order to see what a comment was about).
+ * comment's customer-message/AI-reply/ai_context snapshot comes from, so
+ * each card here is self-contained (no need to regenerate a draft or
+ * re-look-up the order to see what a comment was about or why the AI wrote
+ * what it did) - AiContextPanel.jsx is reused as-is for the "Show AI
+ * context" section, collapsed by default just like on the generate flow.
  *
  * Rendered via a portal straight into document.body: AppShell.jsx's <main>
  * has "relative z-10", which establishes its own stacking context - a
@@ -130,6 +133,17 @@ export default function CommentsSidebar({ isOpen, onClose }) {
                     </p>
                     <p className="mt-1 min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed">{c.text}</p>
                   </div>
+
+                  {c.ai_context?.context && (
+                    <AiContextPanel
+                      context={c.ai_context.context}
+                      systemPromptVersion={c.ai_context.system_prompt_version}
+                      threadMeta={c.ai_context.thread_meta}
+                      reasoning={c.ai_context.reasoning}
+                      policyApplied={c.ai_context.policy_applied}
+                      fieldsUsed={c.ai_context.fields_used}
+                    />
+                  )}
                 </div>
               ))}
             </div>

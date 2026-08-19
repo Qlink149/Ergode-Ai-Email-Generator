@@ -49,6 +49,12 @@ router.post("/", async (req, res) => {
       seq: seq || null,
       customer_message: truncateSnapshot(req.body.customer_message),
       ai_reply: truncateSnapshot(req.body.ai_reply),
+      // Full snapshot of what AiContextPanel.jsx shows when generating -
+      // order facts, thread history, reasoning, policy, system prompt
+      // version - captured as-is (not truncated like the text snippets
+      // above) so the same panel can be re-rendered later against a
+      // comment with full fidelity, no regenerate/re-look-up needed.
+      ai_context: req.body.ai_context || null,
       author,
       text,
       created_at: new Date().toISOString(),

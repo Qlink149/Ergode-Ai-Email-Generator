@@ -22,15 +22,16 @@ function splitBilingualDraft(text) {
  * original draft_reply, which is never overwritten.
  *
  * "Comment" sits next to Edit for the same reason - it's posted against
- * orderId + this exact seq, along with a snapshot of customerMessage and
- * the current draft text (see server/routes/comments.js), so the history
- * in CommentsSidebar.jsx is self-contained: whoever reads a comment later
- * sees exactly what the customer said and what the AI replied, without
- * having to regenerate the draft or re-look-up the order.
+ * orderId + this exact seq, along with a snapshot of customerMessage, the
+ * current draft text, and aiContext (the same order facts/thread
+ * history/reasoning AiContextPanel.jsx shows) (see server/routes/comments.js),
+ * so the history in CommentsSidebar.jsx is self-contained: whoever reads a
+ * comment later sees exactly what the customer said, what the AI replied,
+ * and why - without having to regenerate the draft or re-look-up the order.
  *
  * Shared by TicketDetail.jsx and OrderLookupPage.jsx.
  */
-export default function EditableDraft({ orderId, threadId, seq, draftReply, customerMessage }) {
+export default function EditableDraft({ orderId, threadId, seq, draftReply, customerMessage, aiContext }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(draftReply);
   const [saved, setSaved] = useState(false);
@@ -80,6 +81,7 @@ export default function EditableDraft({ orderId, threadId, seq, draftReply, cust
         seq,
         customerMessage,
         aiReply: reply,
+        aiContext,
       });
       setCommentText("");
       setCommentPosted(true);

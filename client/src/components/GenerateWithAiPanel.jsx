@@ -57,6 +57,14 @@ export default function GenerateWithAiPanel({
                 seq={String(selectedCase.seq)}
                 draftReply={selectedResult.draft_reply}
                 customerMessage={selectedCase.context.customerMessage}
+                aiContext={{
+                  context: selectedResult.context,
+                  system_prompt_version: selectedResult.system_prompt_version,
+                  thread_meta: threadMeta,
+                  reasoning: selectedResult.analysis?.reasoning,
+                  policy_applied: selectedResult.analysis?.policy_applied,
+                  fields_used: selectedResult.analysis?.fields_used,
+                }}
               />
               <AnalysisPills analysis={selectedResult.analysis} />
               <AiContextPanel
