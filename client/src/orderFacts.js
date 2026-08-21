@@ -1,4 +1,4 @@
-/** Shared order-facts shaping for what gets sent to the AI. Used by TicketDetail.jsx and OrderLookupPage.jsx. */
+/** Order-facts shaping for what gets sent to the AI. Used by OrderLookupPage.jsx. */
 
 /**
  * Strips order facts that weren't true yet as of the given message date -

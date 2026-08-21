@@ -1,4 +1,4 @@
-/** Strips Amazon boilerplate out of inbound notice text - live-API equivalent of thread_parser.py's cleaning, adapted for text with no line breaks. */
+/** Strips Amazon boilerplate out of inbound notice text, adapted for text with no line breaks. */
 
 const RETURN_REASONS = [
   "No longer needed",

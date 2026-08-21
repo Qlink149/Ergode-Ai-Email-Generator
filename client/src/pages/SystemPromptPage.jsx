@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Save, CheckCircle2 } from "lucide-react";
+import { Save, CheckCircle2, FileText, AlertCircle } from "lucide-react";
 import { fetchSystemPrompt, saveSystemPrompt } from "../api.js";
 
 /**
@@ -14,6 +14,7 @@ import { fetchSystemPrompt, saveSystemPrompt } from "../api.js";
 
 export default function SystemPromptPage() {
   const [content, setContent] = useState("");
+  const [savedContent, setSavedContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -21,10 +22,16 @@ export default function SystemPromptPage() {
 
   useEffect(() => {
     fetchSystemPrompt()
-      .then((data) => setContent(data.content))
+      .then((data) => {
+        setContent(data.content);
+        setSavedContent(data.content);
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  const isDirty = content !== savedContent;
+  const lineCount = content ? content.split("\n").length : 0;
 
   async function handleSave() {
     setSaving(true);
@@ -32,6 +39,7 @@ export default function SystemPromptPage() {
     setJustSaved(false);
     try {
       await saveSystemPrompt(content);
+      setSavedContent(content);
       setJustSaved(true);
       setTimeout(() => setJustSaved(false), 3000);
     } catch (err) {
@@ -43,30 +51,52 @@ export default function SystemPromptPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold">System Prompt</h2>
-        <p className="text-sm text-[var(--muted)]">
-          This is the exact instruction set the AI uses to write every draft - tone, templates,
-          policies, language rules. Edit and save to change it immediately, no restart needed.
-        </p>
+      <div className="flex items-center gap-3">
+        <span
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+          style={{ background: "rgb(var(--royal-rgb)/0.1)", color: "rgb(var(--royal-rgb)/1)" }}
+        >
+          <FileText size={18} />
+        </span>
+        <h2 className="text-xl font-semibold leading-tight">System Prompt</h2>
       </div>
 
-      {loading && <p className="text-sm text-[var(--muted)]">Loading current prompt...</p>}
+      {loading && (
+        <div className="executive-card space-y-3 p-5">
+          <div className="h-3 w-1/3 animate-pulse rounded-full bg-[rgb(var(--navy-rgb)/0.08)]" />
+          <div className="h-64 w-full animate-pulse rounded-lg bg-[rgb(var(--navy-rgb)/0.05)]" />
+        </div>
+      )}
 
       {!loading && (
-        <div className="executive-card space-y-3 p-5">
-          <textarea
-            className="brand-input w-full rounded-lg px-3 py-2 font-mono text-xs leading-relaxed"
-            rows={28}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            spellCheck={false}
-          />
+        <div className="executive-card overflow-hidden p-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgb(var(--navy-rgb)/0.08)] bg-[rgb(var(--navy-rgb)/0.02)] px-5 py-3">
+            <span className="font-mono text-xs text-[var(--muted)]">system-prompt.md</span>
+            <span className="flex items-center gap-3 text-xs text-[var(--muted)]">
+              {lineCount} lines
+              {isDirty && (
+                <span className="flex items-center gap-1 font-medium text-[var(--warning)]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                  Unsaved changes
+                </span>
+              )}
+            </span>
+          </div>
 
-          <div className="flex items-center gap-3">
+          <div className="p-5 pb-0">
+            <textarea
+              className="brand-input w-full rounded-lg px-3 py-2 font-mono text-xs leading-relaxed"
+              rows={28}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              spellCheck={false}
+            />
+          </div>
+
+          <div className="flex items-center gap-3 px-5 py-4">
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || !isDirty}
               className="brand-button px-5 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Save size={16} />
@@ -79,9 +109,14 @@ export default function SystemPromptPage() {
                 Saved - next generation will use this version.
               </span>
             )}
-          </div>
 
-          {error && <p className="text-sm text-[var(--executive-error)]">{error}</p>}
+            {error && (
+              <span className="flex items-center gap-1.5 text-sm text-[var(--executive-error)]">
+                <AlertCircle size={16} />
+                {error}
+              </span>
+            )}
+          </div>
         </div>
       )}
     </div>

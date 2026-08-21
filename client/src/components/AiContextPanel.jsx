@@ -5,7 +5,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
  * Shows what the AI actually received for one generation, plus its own
  * explanation of why it wrote the reply the way it did. threadMeta is
  * reference-only, never sent to the AI - it's been unreliable in testing.
- * Shared by TicketDetail.jsx and OrderLookupPage.jsx.
+ * Used by OrderLookupPage.jsx.
  */
 export default function AiContextPanel({
   context,

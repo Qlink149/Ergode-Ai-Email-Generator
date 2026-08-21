@@ -1,4 +1,4 @@
-/** Sentiment/urgency/confidence/review-flag pills for one generated draft. Shared by TicketDetail.jsx and OrderLookupPage.jsx. */
+/** Sentiment/urgency/confidence/review-flag pills for one generated draft. Used by OrderLookupPage.jsx. */
 export default function AnalysisPills({ analysis }) {
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">

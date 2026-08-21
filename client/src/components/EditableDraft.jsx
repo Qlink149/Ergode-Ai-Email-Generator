@@ -29,7 +29,7 @@ function splitBilingualDraft(text) {
  * comment later sees exactly what the customer said, what the AI replied,
  * and why - without having to regenerate the draft or re-look-up the order.
  *
- * Shared by TicketDetail.jsx and OrderLookupPage.jsx.
+ * Used by OrderLookupPage.jsx.
  */
 export default function EditableDraft({ orderId, threadId, seq, draftReply, customerMessage, aiContext }) {
   const [editing, setEditing] = useState(false);

@@ -1,21 +1,19 @@
 /**
  * routes/orderLookup.js
  * -----------------------
- * The live-data counterpart to the ticket queue: look up one order by id
- * against the real Order API and CRM Thread API, classify what comes
- * back (see disclosureClassifier.js), and hand the customer-safe +
- * internal view to the frontend. NEVER_SURFACE fields never reach this
- * response at all.
+ * Look up one order by id against the real Order API and CRM Thread API,
+ * classify what comes back (see disclosureClassifier.js), and hand the
+ * customer-safe + internal view to the frontend. NEVER_SURFACE fields
+ * never reach this response at all.
  *
  * The CRM Thread API call is allowed to fail independently (e.g. no real
  * CRM_API_KEY configured yet) without failing the whole lookup - order
  * data alone is still useful, and the frontend shows a clear message for
  * whichever half didn't come back.
  *
- * email_summary's inbound messages get the same boilerplate-stripping
- * pass as the ticket queue's sync (liveTicketSync.js) - otherwise this
- * page would hand the AI raw Amazon notification text instead of the
- * customer's actual words, which the ticket queue never does.
+ * email_summary's inbound messages get a boilerplate-stripping pass (see
+ * messageCleaner.js) - otherwise this page would hand the AI raw Amazon
+ * notification text instead of the customer's actual words.
  */
 
 const express = require("express");

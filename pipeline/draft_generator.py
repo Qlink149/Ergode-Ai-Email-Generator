@@ -1,7 +1,8 @@
 """
 draft_generator.py
 -------------------
-Sends a context package (the "briefing note" built by context_builder.py)
+Sends a context package (the customer's message, thread history, and real
+order/CRM facts assembled server-side - see server/routes/orderLookup.js)
 to OpenAI and gets back a draft reply, written in Ergode's voice.
 
 The system prompt (tone, templates, rules) comes from system_prompt_store.py,
@@ -9,9 +10,7 @@ read fresh from MongoDB on every call, not cached - so editing it from the
 System Prompt page in the UI takes effect on the very next generation, with
 no restart needed. Only the facts specific to one reply - the
 customer's message, the thread history, the order id - go into the user
-turn. That split is deliberate: it is exactly what a production system
-does, and it is why swapping in real order/CRM data later only changes
-format_user_prompt(), not this file's structure.
+turn.
 """
 
 from datetime import datetime
@@ -20,7 +19,7 @@ from typing import List, Optional
 from openai import BadRequestError, OpenAI
 
 from config import OPENAI_API_KEY, OPENAI_MODEL, require_openai_key
-from draft_sanitizer import sanitize_draft
+from draft_sanitizer import sanitize_draft, strip_unrequested_refund_amount
 from system_prompt_store import load_system_prompt
 
 
@@ -278,4 +277,5 @@ def generate_draft(context: dict, client: Optional[OpenAI] = None) -> str:
             raise
         response = client.chat.completions.create(model=OPENAI_MODEL, messages=messages)
 
-    return sanitize_draft(response.choices[0].message.content)
+    draft = sanitize_draft(response.choices[0].message.content)
+    return strip_unrequested_refund_amount(draft, context.get("customer_message"))

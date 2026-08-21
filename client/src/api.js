@@ -66,10 +66,6 @@ export async function login(password) {
   localStorage.setItem(TOKEN_KEY, data.token);
 }
 
-export async function fetchReport() {
-  return apiFetch("/api/reports");
-}
-
 /**
  * Ask the AI to draft a reply right now for a typed-in customer message.
  * Leave `language` empty to auto-detect from the customer's message, or
@@ -119,14 +115,6 @@ export async function fetchOrderLookup(orderId) {
 
 export async function fetchSystemPrompt() {
   return apiFetch("/api/system-prompt");
-}
-
-export async function fetchTickets() {
-  return apiFetch("/api/tickets");
-}
-
-export async function fetchTicketThread(threadId) {
-  return apiFetch(`/api/tickets/${threadId}`);
 }
 
 /** Save a human edit to a previously generated draft. */

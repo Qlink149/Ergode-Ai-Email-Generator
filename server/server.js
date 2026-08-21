@@ -20,10 +20,8 @@ const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 const express = require("express");
 const cors = require("cors");
-const reportsRouter = require("./routes/reports");
 const generateRouter = require("./routes/generate");
 const systemPromptRouter = require("./routes/systemPrompt");
-const ticketsRouter = require("./routes/tickets");
 const orderLookupRouter = require("./routes/orderLookup");
 const draftEditRouter = require("./routes/draftEdit");
 const translateRouter = require("./routes/translate");
@@ -71,10 +69,8 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-app.use("/api/reports", reportsRouter);
 app.use("/api/generate", generateRouter);
 app.use("/api/system-prompt", systemPromptRouter);
-app.use("/api/tickets", ticketsRouter);
 app.use("/api/order-lookup", orderLookupRouter);
 app.use("/api/draft-edit", draftEditRouter);
 app.use("/api/translate", translateRouter);

@@ -6,7 +6,7 @@
  * headers there, just five divided columns of label/value rows.
  * `internal` fields (seller, auxhold, processing-site) are agent-facing
  * only - never read into AI-generated text, see disclosureClassifier.js.
- * Shared by TicketDetail.jsx and OrderLookupPage.jsx.
+ * Used by OrderLookupPage.jsx.
  */
 
 function Field({ label, value, index }) {

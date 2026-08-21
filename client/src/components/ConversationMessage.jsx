@@ -4,10 +4,9 @@ import MessageText from "./MessageText.jsx";
 import { translateMessage } from "../api.js";
 
 /**
- * One message in a conversation thread - shared by TicketDetail.jsx and
- * OrderLookupPage.jsx so both pages render the exact same email-style
- * block (From:/To: header with the real relay address, timestamp,
- * direction-colored background) instead of two different layouts.
+ * One message in a conversation thread - used by OrderLookupPage.jsx to
+ * render an email-style block (From:/To: header with the real relay
+ * address, timestamp, direction-colored background).
  *
  * Every message (customer or agent/CRM) gets an on-demand "Translate"
  * toggle - a real OpenAI call, so it only fires on click, never

@@ -6,9 +6,7 @@ import AiContextPanel from "./AiContextPanel.jsx";
 /**
  * The persistent right-hand "Generate with AI" panel - shows the button and,
  * once generated, the results for whichever customer message is currently
- * selected on the left. Shared by TicketDetail.jsx and OrderLookupPage.jsx
- * so both pages drive the exact same generation UI off a click-a-message
- * selection, not two separately-maintained flows.
+ * selected on the left. Used by OrderLookupPage.jsx.
  */
 export default function GenerateWithAiPanel({
   selectedCase,

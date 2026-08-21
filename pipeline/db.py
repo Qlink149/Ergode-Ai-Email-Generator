@@ -7,11 +7,6 @@ Node side - same database, same collection names, so Node and Python
 never disagree about where data lives.
 
 Collections:
-  parsed_threads  - one document per thread (written by thread_parser.py,
-                     read by server/routes/tickets.js)
-  pipeline_runs   - one document per pipeline run, write-once, never
-                     overwritten (written by report_builder.py, read by
-                     server/routes/reports.js)
   system_prompts  - versioned system prompt text (read/written by api.py)
   ai_drafts       - one document per on-demand generation: context in,
                      draft + analysis out (written by draft_store.py)

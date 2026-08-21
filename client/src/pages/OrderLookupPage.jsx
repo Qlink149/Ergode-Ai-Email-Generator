@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Search, MessageSquare } from "lucide-react";
+import { Search, MessageSquare, Package, AlertCircle, Loader2, Inbox } from "lucide-react";
 import { fetchOrderLookup, generateDraft } from "../api.js";
 import LanguageInput from "../components/LanguageInput.jsx";
 import ConversationMessage from "../components/ConversationMessage.jsx";
@@ -154,37 +154,46 @@ export default function OrderLookupPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-semibold">Order Lookup</h2>
-        <p className="text-sm text-[var(--muted)]">
-          Look up an order against the live Order API and CRM Thread API, then generate an AI
-          reply grounded in the real data and compare it to what was actually sent.
-        </p>
+      <div className="flex items-center gap-3">
+        <span
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+          style={{ background: "rgb(var(--royal-rgb)/0.1)", color: "rgb(var(--royal-rgb)/1)" }}
+        >
+          <Search size={18} />
+        </span>
+        <h2 className="text-xl font-semibold leading-tight">Order Lookup</h2>
       </div>
 
-      <div className="executive-card flex flex-wrap items-end gap-3 p-4">
+      <div className="executive-card flex flex-wrap items-end gap-3 p-5">
         <div className="min-w-[220px] flex-1">
           <label className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
             Order ID
           </label>
-          <input
-            className="brand-input mt-1 w-full rounded-lg px-3 py-2 text-sm"
-            value={orderIdInput}
-            onChange={(e) => setOrderIdInput(e.target.value)}
-            placeholder="e.g. 702-3961911-0960221"
-          />
+          <div className="relative mt-1">
+            <Search
+              size={15}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]"
+            />
+            <input
+              className="brand-input w-full rounded-lg py-2 pl-9 pr-3 text-sm"
+              value={orderIdInput}
+              onChange={(e) => setOrderIdInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleLookup()}
+              placeholder="e.g. 702-3961911-0960221"
+            />
+          </div>
         </div>
         <button
           onClick={handleLookup}
           disabled={loading || !orderIdInput.trim()}
-          className="brand-button px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          className="brand-button px-4 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <Search size={16} />
+          {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
           {loading ? "Looking up..." : "Look Up"}
         </button>
         <button
           onClick={() => setCommentsOpen(true)}
-          className="brand-button-ghost px-4 py-2 text-sm"
+          className="brand-button-ghost px-4 py-2.5 text-sm"
         >
           <MessageSquare size={16} />
           Comments
@@ -192,11 +201,35 @@ export default function OrderLookupPage() {
       </div>
 
       {error && (
-        <div className="executive-card-soft p-4 text-sm text-[var(--executive-error)]">{error}</div>
+        <div className="executive-card-soft flex items-start gap-2.5 p-4 text-sm text-[var(--executive-error)]">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {!lookup && !loading && !error && (
+        <div className="executive-card-soft flex flex-col items-center gap-2 px-6 py-14 text-center">
+          <span
+            className="flex h-12 w-12 items-center justify-center rounded-full"
+            style={{ background: "rgb(var(--navy-rgb)/0.05)", color: "var(--muted)" }}
+          >
+            <Inbox size={22} />
+          </span>
+          <p className="text-sm font-medium">No order looked up yet</p>
+          <p className="max-w-xs text-xs text-[var(--muted)]">
+            Enter an order ID above to pull its live details and conversation.
+          </p>
+        </div>
       )}
 
       {lookup && (
         <>
+          <div className="flex items-center gap-2">
+            <Package size={15} className="text-[var(--muted)]" />
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Order Details
+            </h3>
+          </div>
           <OrderDetailsGrid
             orderId={lookup.order_id}
             customerSafe={lookup.order.customer_safe}
@@ -208,17 +241,23 @@ export default function OrderLookupPage() {
           </div>
 
           {needsManualMessage ? (
-            <div className="executive-card-soft p-4 text-sm text-[var(--muted)]">
-              {lookup.thread_error
-                ? `CRM thread unavailable: ${lookup.thread_error}`
-                : "The CRM API returned no usable customer message text for this order."}
+            <div className="executive-card-soft flex items-start gap-2.5 p-4 text-sm text-[var(--muted)]">
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <span>
+                {lookup.thread_error
+                  ? `CRM thread unavailable: ${lookup.thread_error}`
+                  : "The CRM API returned no usable customer message text for this order."}
+              </span>
             </div>
           ) : (
             <div className="grid gap-4 lg:grid-cols-[3fr_2fr] lg:items-start">
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-                  Conversation
-                </h3>
+                <div className="flex items-center gap-2">
+                  <MessageSquare size={15} className="text-[var(--muted)]" />
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
+                    Conversation
+                  </h3>
+                </div>
                 {messages.map((message) => {
                   const isCustomer = message.direction === "in";
                   const messageCase = isCustomer ? caseBySeq[message.seq] : null;
