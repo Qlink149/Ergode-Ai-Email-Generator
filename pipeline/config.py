@@ -19,7 +19,11 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 # --- Secrets / settings coming from .env ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+# Fixed, not read from the environment - a missing/misconfigured
+# OPENAI_MODEL env var in production was traced to drafts silently
+# generating on a weaker model than what was tested locally, with the
+# exact same system prompt giving wrong answers as a result.
+OPENAI_MODEL = "gpt-5.6-luna"
 PIPELINE_PORT = int(os.getenv("PIPELINE_PORT", "8001"))
 SERVER_PORT = int(os.getenv("SERVER_PORT", "4000"))
 # SERVER_URL is how order_lookup_client.py reaches the Node server to reuse
