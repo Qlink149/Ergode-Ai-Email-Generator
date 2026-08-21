@@ -30,18 +30,7 @@ export default function AppShell({ badge, title, description, onLogout, children
       >
         <div className="page-width px-4 sm:px-6 lg:px-8">
           <div className="flex h-14 items-center gap-3">
-            {badge && (
-              <span
-                className="rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.20em]"
-                style={{
-                  background: "rgb(var(--royal-rgb)/0.08)",
-                  border: "1px solid rgb(var(--royal-rgb)/0.14)",
-                  color: "rgb(var(--royal-rgb)/1)",
-                }}
-              >
-                {badge}
-              </span>
-            )}
+            {badge && <img src={logo} alt={badge} className="h-7 w-auto shrink-0" />}
             {title && <h1 className="truncate text-sm font-semibold leading-none">{title}</h1>}
             {description && (
               <span className="hidden truncate text-xs text-slate-400 lg:inline">
