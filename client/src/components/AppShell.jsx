@@ -30,7 +30,14 @@ export default function AppShell({ badge, title, description, onLogout, children
       >
         <div className="page-width px-4 sm:px-6 lg:px-8">
           <div className="flex h-14 items-center gap-3">
-            {badge && <img src={logo} alt={badge} className="h-7 w-auto shrink-0" />}
+            {badge && (
+              <span
+                className="flex shrink-0 items-center rounded-full px-3 py-1.5"
+                style={{ background: "rgb(var(--navy-rgb)/1)" }}
+              >
+                <img src="/ergode.webp" alt={badge} className="h-4 w-auto" />
+              </span>
+            )}
             {title && <h1 className="truncate text-sm font-semibold leading-none">{title}</h1>}
             {description && (
               <span className="hidden truncate text-xs text-slate-400 lg:inline">
