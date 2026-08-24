@@ -179,3 +179,42 @@ export async function saveSystemPrompt(content) {
     body: JSON.stringify({ content }),
   });
 }
+
+/** Every past system-prompt version, newest first - for the Version History view. */
+export async function fetchSystemPromptVersions() {
+  return apiFetch("/api/system-prompt/versions");
+}
+
+/** Unread counts for the header's notification bell - pending proposals + unseen escalations. */
+export async function fetchNotificationsSummary() {
+  return apiFetch("/api/notifications");
+}
+
+/** Prompt-fix proposals still awaiting an Approve/Reject decision. */
+export async function fetchPendingProposals() {
+  return apiFetch("/api/proposals");
+}
+
+/** Applies a proposal's full proposed text as the new live system-prompt version. */
+export async function approveProposal(id) {
+  return apiFetch(`/api/proposals/${id}/approve`, { method: "POST" });
+}
+
+/** Discards a proposal - the live system prompt is left untouched. */
+export async function rejectProposal(id) {
+  return apiFetch(`/api/proposals/${id}/reject`, { method: "POST" });
+}
+
+/** Code/data-restriction escalations from the triage agent. Pass "unseen" to filter. */
+export async function fetchEscalations(status) {
+  return apiFetch(`/api/escalations${status ? `?status=${status}` : ""}`);
+}
+
+/** Marks a batch of escalations as seen - called once the Escalations section is actually viewed. */
+export async function markEscalationsSeen(ids) {
+  return apiFetch("/api/escalations/seen", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids }),
+  });
+}

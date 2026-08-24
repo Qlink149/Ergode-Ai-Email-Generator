@@ -34,6 +34,7 @@
   --lavender-rgb: 141 87 222;
   --success-rgb: 34 176 125;
   --danger-rgb: 210 95 134;
+  --warning-rgb: 245 158 11;
 
   --font-ui: "Segoe UI Variable Text", "Segoe UI", "Helvetica Neue", Arial, -apple-system,
     BlinkMacSystemFont, system-ui, sans-serif;
@@ -75,6 +76,24 @@ html {
 
 .ai-cta-glow {
   animation: ai-cta-glow 2.4s ease-in-out infinite;
+}
+
+/* Pending Approvals queue cards - a small settle-in on load, applied with
+   a per-index animation-delay in PendingApprovalsPage.jsx for a gentle
+   cascade rather than everything popping in at once. */
+@keyframes triage-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.triage-item-in {
+  animation: triage-item-in 220ms ease-out both;
 }
 
 body {
@@ -243,7 +262,9 @@ h6 {
 
 .brand-button,
 .brand-button-soft,
-.brand-button-ghost {
+.brand-button-ghost,
+.brand-button-success,
+.brand-button-danger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -275,6 +296,30 @@ h6 {
 .brand-button-ghost:hover {
   background: rgb(var(--violet-rgb) / 0.08);
   border-color: rgb(var(--violet-rgb) / 0.18);
+}
+
+.brand-button-success {
+  border: 1px solid rgb(var(--success-rgb) / 0.25);
+  background: linear-gradient(135deg, rgb(var(--success-rgb) / 0.95), rgb(var(--success-rgb) / 0.78));
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgb(var(--success-rgb) / 0.22);
+}
+
+.brand-button-success:hover {
+  background: linear-gradient(135deg, rgb(var(--success-rgb) / 1), rgb(var(--success-rgb) / 0.85));
+  transform: translateY(-1px);
+}
+
+.brand-button-danger {
+  border: 1px solid rgb(var(--danger-rgb) / 0.25);
+  background: linear-gradient(135deg, rgb(var(--danger-rgb) / 0.95), rgb(var(--danger-rgb) / 0.78));
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgb(var(--danger-rgb) / 0.22);
+}
+
+.brand-button-danger:hover {
+  background: linear-gradient(135deg, rgb(var(--danger-rgb) / 1), rgb(var(--danger-rgb) / 0.85));
+  transform: translateY(-1px);
 }
 
 .brand-input {
@@ -323,4 +368,10 @@ h6 {
   background: rgb(var(--navy-rgb) / 0.06);
   color: var(--muted);
   border: 1px solid rgb(var(--navy-rgb) / 0.1);
+}
+
+.pill-warning {
+  background: rgb(var(--warning-rgb) / 0.14);
+  color: #92600a;
+  border: 1px solid rgb(var(--warning-rgb) / 0.28);
 }

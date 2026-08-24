@@ -1,10 +1,4 @@
-/**
- * routes/systemPrompt.js
- * -----------------------
- * Read and update the live system prompt, by proxying to the Python
- * pipeline service (which owns the actual prompt file). A save here takes
- * effect on the very next draft generated - no restart needed anywhere.
- */
+/** Proxies the Pending Approvals queue (prompt-fix proposals) to the Python pipeline. */
 
 const express = require("express");
 const { computeToken } = require("../services/authToken");
@@ -14,7 +8,7 @@ const PIPELINE_URL = process.env.PIPELINE_URL || "http://localhost:8001";
 
 router.get("/", async (req, res) => {
   try {
-    const response = await fetch(`${PIPELINE_URL}/system-prompt`, {
+    const response = await fetch(`${PIPELINE_URL}/proposals`, {
       headers: { Authorization: `Bearer ${computeToken()}` },
     });
     const data = await response.json();
@@ -27,9 +21,10 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/versions", async (req, res) => {
+router.post("/:id/approve", async (req, res) => {
   try {
-    const response = await fetch(`${PIPELINE_URL}/system-prompt/versions`, {
+    const response = await fetch(`${PIPELINE_URL}/proposals/${req.params.id}/approve`, {
+      method: "POST",
       headers: { Authorization: `Bearer ${computeToken()}` },
     });
     const data = await response.json();
@@ -42,12 +37,11 @@ router.get("/versions", async (req, res) => {
   }
 });
 
-router.put("/", async (req, res) => {
+router.post("/:id/reject", async (req, res) => {
   try {
-    const response = await fetch(`${PIPELINE_URL}/system-prompt`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${computeToken()}` },
-      body: JSON.stringify(req.body),
+    const response = await fetch(`${PIPELINE_URL}/proposals/${req.params.id}/reject`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${computeToken()}` },
     });
     const data = await response.json();
     res.status(response.status).json(data);

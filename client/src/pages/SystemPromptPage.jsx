@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Save, CheckCircle2, FileText, AlertCircle } from "lucide-react";
+import { Save, CheckCircle2, FileText, AlertCircle, History } from "lucide-react";
 import { fetchSystemPrompt, saveSystemPrompt } from "../api.js";
+import PromptVersionHistory from "../components/PromptVersionHistory.jsx";
 
 /**
  * SystemPromptPage.jsx
@@ -19,8 +20,10 @@ export default function SystemPromptPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [justSaved, setJustSaved] = useState(false);
+  const [view, setView] = useState("editor");
 
-  useEffect(() => {
+  function loadCurrentPrompt() {
+    setLoading(true);
     fetchSystemPrompt()
       .then((data) => {
         setContent(data.content);
@@ -28,6 +31,10 @@ export default function SystemPromptPage() {
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    loadCurrentPrompt();
   }, []);
 
   const isDirty = content !== savedContent;
@@ -51,24 +58,44 @@ export default function SystemPromptPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <span
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
-          style={{ background: "rgb(var(--royal-rgb)/0.1)", color: "rgb(var(--royal-rgb)/1)" }}
-        >
-          <FileText size={18} />
-        </span>
-        <h2 className="text-xl font-semibold leading-tight">System Prompt</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+            style={{ background: "rgb(var(--royal-rgb)/0.1)", color: "rgb(var(--royal-rgb)/1)" }}
+          >
+            <FileText size={18} />
+          </span>
+          <h2 className="text-xl font-semibold leading-tight">System Prompt</h2>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setView("editor")}
+            className={view === "editor" ? "brand-button px-3 py-1.5 text-xs" : "brand-button-ghost px-3 py-1.5 text-xs"}
+          >
+            <FileText size={13} />
+            Editor
+          </button>
+          <button
+            onClick={() => setView("history")}
+            className={view === "history" ? "brand-button px-3 py-1.5 text-xs" : "brand-button-ghost px-3 py-1.5 text-xs"}
+          >
+            <History size={13} />
+            History
+          </button>
+        </div>
       </div>
 
-      {loading && (
+      {view === "history" && <PromptVersionHistory onRestored={loadCurrentPrompt} />}
+
+      {view === "editor" && loading && (
         <div className="executive-card space-y-3 p-5">
           <div className="h-3 w-1/3 animate-pulse rounded-full bg-[rgb(var(--navy-rgb)/0.08)]" />
           <div className="h-64 w-full animate-pulse rounded-lg bg-[rgb(var(--navy-rgb)/0.05)]" />
         </div>
       )}
 
-      {!loading && (
+      {view === "editor" && !loading && (
         <div className="executive-card overflow-hidden p-0">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgb(var(--navy-rgb)/0.08)] bg-[rgb(var(--navy-rgb)/0.02)] px-5 py-3">
             <span className="font-mono text-xs text-[var(--muted)]">system-prompt.md</span>

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, MessageSquareText } from "lucide-react";
+import { X, MessageSquareText, Clock3 } from "lucide-react";
 import { fetchRecentComments } from "../api.js";
 import AiContextPanel from "./AiContextPanel.jsx";
+import EscalationBadge from "./EscalationBadge.jsx";
 
 /**
  * CommentsSidebar.jsx
@@ -116,6 +117,15 @@ export default function CommentsSidebar({ isOpen, onClose }) {
                       <span className="font-semibold">{c.author}</span>
                       <span className="text-[var(--muted)]">on order</span>
                       <span className="font-semibold">{c.order_id}</span>
+                      {(c.triage_outcome === "code_restriction" ||
+                        c.triage_outcome === "data_restriction" ||
+                        c.triage_outcome === "none") && <EscalationBadge type={c.triage_outcome} />}
+                      {c.triage_outcome === "prompt_fix" && (
+                        <span className="pill pill-neutral">
+                          <Clock3 size={11} />
+                          Prompt fix proposed
+                        </span>
+                      )}
                     </div>
                     <span className="text-xs text-[var(--muted)]">{formatTimestamp(c.created_at)}</span>
                   </div>

@@ -1,10 +1,4 @@
-/**
- * routes/systemPrompt.js
- * -----------------------
- * Read and update the live system prompt, by proxying to the Python
- * pipeline service (which owns the actual prompt file). A save here takes
- * effect on the very next draft generated - no restart needed anywhere.
- */
+/** Proxies code/data restriction escalations (from the triage agent) to the Python pipeline. */
 
 const express = require("express");
 const { computeToken } = require("../services/authToken");
@@ -14,7 +8,8 @@ const PIPELINE_URL = process.env.PIPELINE_URL || "http://localhost:8001";
 
 router.get("/", async (req, res) => {
   try {
-    const response = await fetch(`${PIPELINE_URL}/system-prompt`, {
+    const qs = req.query.status ? `?status=${encodeURIComponent(req.query.status)}` : "";
+    const response = await fetch(`${PIPELINE_URL}/escalations${qs}`, {
       headers: { Authorization: `Bearer ${computeToken()}` },
     });
     const data = await response.json();
@@ -27,25 +22,10 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/versions", async (req, res) => {
+router.post("/seen", async (req, res) => {
   try {
-    const response = await fetch(`${PIPELINE_URL}/system-prompt/versions`, {
-      headers: { Authorization: `Bearer ${computeToken()}` },
-    });
-    const data = await response.json();
-    res.status(response.status).json(data);
-  } catch (err) {
-    res.status(502).json({
-      error: "Could not reach the AI pipeline service. Is it running (uvicorn api:app --port 8001)?",
-      detail: err.message,
-    });
-  }
-});
-
-router.put("/", async (req, res) => {
-  try {
-    const response = await fetch(`${PIPELINE_URL}/system-prompt`, {
-      method: "PUT",
+    const response = await fetch(`${PIPELINE_URL}/escalations/seen`, {
+      method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${computeToken()}` },
       body: JSON.stringify(req.body),
     });

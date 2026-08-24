@@ -15,8 +15,10 @@
 
 const express = require("express");
 const { getDb } = require("../db");
+const { computeToken } = require("../services/authToken");
 
 const router = express.Router();
+const PIPELINE_URL = process.env.PIPELINE_URL || "http://localhost:8001";
 
 // Comment-time snapshots are for context, not full transcripts - cap length
 // so a pasted essay-length message can't bloat a comment document.
@@ -60,7 +62,50 @@ router.post("/", async (req, res) => {
       created_at: new Date().toISOString(),
     };
     const result = await db.collection("order_comments").insertOne(comment);
-    res.status(201).json({ ...comment, _id: result.insertedId });
+
+    // A comment is itself feedback - run it through the triage agent right
+    // away so a wrong-prompt gap surfaces as a proposal, or a code/data gap
+    // surfaces as an escalation, without anyone having to notice by hand.
+    // Best-effort: the comment is already saved either way, a triage
+    // failure here should never turn a successful post into an error.
+    let triage = null;
+    try {
+      const triageResp = await fetch(`${PIPELINE_URL}/triage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${computeToken()}` },
+        body: JSON.stringify({
+          trigger_type: "comment",
+          order_id: orderId,
+          author,
+          comment_id: String(result.insertedId),
+          seq,
+          source_text: text,
+          // Prefer the full, untruncated message/facts already captured on
+          // ai_context over the 500-char comment snapshot, when present.
+          customer_message: comment.ai_context?.context?.customer_message ?? comment.customer_message,
+          ai_draft_reply: comment.ai_reply,
+          ai_reasoning: comment.ai_context?.reasoning,
+          ai_policy_applied: comment.ai_context?.policy_applied,
+          order_facts: comment.ai_context?.context?.order_facts,
+          thread_history: comment.ai_context?.context?.thread_history,
+        }),
+      });
+      triage = await triageResp.json();
+      await db.collection("order_comments").updateOne(
+        { _id: result.insertedId },
+        {
+          $set: {
+            triage_outcome: triage.outcome ?? null,
+            triage_proposal_id: triage.proposal_id ?? null,
+            triage_escalation_id: triage.escalation_id ?? null,
+          },
+        }
+      );
+    } catch (err) {
+      // Pipeline unreachable, or triage itself failed - comment stands as saved.
+    }
+
+    res.status(201).json({ ...comment, _id: result.insertedId, triage });
   } catch (err) {
     res.status(502).json({ error: `Could not save comment: ${err.message}` });
   }

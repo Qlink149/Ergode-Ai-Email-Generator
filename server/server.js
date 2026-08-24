@@ -26,6 +26,9 @@ const orderLookupRouter = require("./routes/orderLookup");
 const draftEditRouter = require("./routes/draftEdit");
 const translateRouter = require("./routes/translate");
 const commentsRouter = require("./routes/comments");
+const proposalsRouter = require("./routes/proposals");
+const escalationsRouter = require("./routes/escalations");
+const notificationsRouter = require("./routes/notifications");
 const authRouter = require("./routes/auth");
 const { verifyToken } = require("./services/authToken");
 
@@ -75,6 +78,9 @@ app.use("/api/order-lookup", orderLookupRouter);
 app.use("/api/draft-edit", draftEditRouter);
 app.use("/api/translate", translateRouter);
 app.use("/api/comments", commentsRouter);
+app.use("/api/proposals", proposalsRouter);
+app.use("/api/escalations", escalationsRouter);
+app.use("/api/notifications", notificationsRouter);
 
 // Only bind a real port locally - on Vercel, app.listen() must not run;
 // the platform invokes `app` directly as the request handler instead.

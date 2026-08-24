@@ -31,10 +31,18 @@ from openai import OpenAI
 from auth_token import verify_token
 from config import OPENAI_API_KEY, require_openai_key
 from draft_generator import generate_draft
-from system_prompt_store import load_system_prompt, save_system_prompt, get_system_prompt_version
+from system_prompt_store import (
+    load_system_prompt,
+    save_system_prompt,
+    get_system_prompt_version,
+    list_system_prompt_versions,
+)
 from analysis import analyze_message
 from draft_store import save_draft, save_draft_edit
 from translator import translate_to_english
+from triage_agent import run_and_persist_triage
+from prompt_proposal_store import get_pending_proposals, approve_proposal, reject_proposal
+from escalation_store import get_escalations, mark_escalations_seen, count_unseen_escalations
 
 app = FastAPI(title="Ergode AI Pipeline")
 
@@ -178,6 +186,12 @@ def update_system_prompt(payload: SystemPromptPayload):
     return {"status": "saved", "version": version}
 
 
+@router.get("/system-prompt/versions", dependencies=[Depends(require_auth)])
+def system_prompt_versions():
+    """Every past version, newest first, for the System Prompt page's Version History view."""
+    return {"versions": list_system_prompt_versions()}
+
+
 class DraftEditPayload(BaseModel):
     thread_id: str
     seq: str
@@ -186,11 +200,125 @@ class DraftEditPayload(BaseModel):
 
 @router.put("/draft-edit", dependencies=[Depends(require_auth)])
 def edit_draft(payload: DraftEditPayload):
-    """Saves a human edit to a draft - the original draft_reply is left untouched."""
+    """
+    Saves a human edit to a draft - the original draft_reply is left
+    untouched. A manual rewrite is itself feedback (it shows exactly what
+    was wrong), so this also runs it through the triage agent - best
+    effort, never lets a triage failure turn a successful save into an
+    error response.
+    """
     result = save_draft_edit(payload.thread_id, payload.seq, payload.edited_reply)
     if result is None:
         return {"status": "not_found"}
-    return {"status": "saved", **result}
+
+    try:
+        ctx = result.get("context") or {}
+        analysis = result.get("analysis") or {}
+        run_and_persist_triage(
+            {
+                "trigger_type": "draft_edit",
+                "order_id": ctx.get("order_id"),
+                "author": "unknown",  # the draft-edit form has no author field today
+                "thread_id": payload.thread_id,
+                "seq": payload.seq,
+                "source_text": payload.edited_reply,
+                "customer_message": ctx.get("customer_message"),
+                "ai_draft_reply": result.get("draft_reply"),
+                "ai_reasoning": analysis.get("reasoning"),
+                "ai_policy_applied": analysis.get("policy_applied"),
+                "order_facts": ctx.get("order_facts"),
+                "thread_history": ctx.get("thread_history"),
+            }
+        )
+    except Exception:
+        pass
+
+    return {
+        "status": "saved",
+        "thread_id": result["thread_id"],
+        "seq": result["seq"],
+        "edited_reply": result["edited_reply"],
+    }
+
+
+class TriageRequest(BaseModel):
+    trigger_type: str  # "comment" | "draft_edit"
+    order_id: Optional[str] = None
+    author: str
+    comment_id: Optional[str] = None
+    thread_id: Optional[str] = None
+    seq: Optional[str] = None
+    source_text: str
+    customer_message: Optional[str] = None
+    ai_draft_reply: Optional[str] = None
+    ai_reasoning: Optional[str] = None
+    ai_policy_applied: Optional[str] = None
+    order_facts: Optional[dict] = None
+    thread_history: Optional[List[dict]] = None
+
+
+@router.post("/triage", dependencies=[Depends(require_auth)])
+def triage(payload: TriageRequest):
+    """Called by server/routes/comments.js right after a comment is inserted."""
+    return run_and_persist_triage(payload.model_dump())
+
+
+@router.get("/proposals", dependencies=[Depends(require_auth)])
+def list_proposals():
+    """Pending prompt-fix proposals, for the Pending Approvals page."""
+    return {"proposals": get_pending_proposals()}
+
+
+@router.post("/proposals/{proposal_id}/approve", dependencies=[Depends(require_auth)])
+def approve(proposal_id: str):
+    """
+    Re-checks the fix against the CURRENT live prompt before applying it
+    (see prompt_proposal_store.py's approve_proposal()) - the response's
+    "status" reflects what actually happened: "approved" if the fix went
+    live just now, "already_covered" if the live prompt turned out to
+    already cover it and nothing was changed.
+    """
+    result = approve_proposal(proposal_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Proposal not found or already reviewed")
+    if result.get("needs_manual_review"):
+        status = "needs_manual_review"
+    elif result.get("already_covered"):
+        status = "already_covered"
+    else:
+        status = "approved"
+    return {"status": status, **result}
+
+
+@router.post("/proposals/{proposal_id}/reject", dependencies=[Depends(require_auth)])
+def reject(proposal_id: str):
+    result = reject_proposal(proposal_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Proposal not found or already reviewed")
+    return {"status": "rejected", **result}
+
+
+@router.get("/escalations", dependencies=[Depends(require_auth)])
+def list_escalations(status: Optional[str] = None):
+    return {"escalations": get_escalations(status)}
+
+
+class EscalationSeenPayload(BaseModel):
+    ids: List[str]
+
+
+@router.post("/escalations/seen", dependencies=[Depends(require_auth)])
+def escalations_seen(payload: EscalationSeenPayload):
+    count = mark_escalations_seen(payload.ids)
+    return {"status": "ok", "updated": count}
+
+
+@router.get("/notifications/summary", dependencies=[Depends(require_auth)])
+def notifications_summary():
+    return {
+        "pending_proposals_count": len(get_pending_proposals()),
+        "unseen_escalations_count": count_unseen_escalations(),
+    }
 
 
 class TranslatePayload(BaseModel):

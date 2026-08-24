@@ -42,12 +42,39 @@ def get_system_prompt_version() -> int:
     return latest["version"] if latest else 0
 
 
-def save_system_prompt(content: str) -> int:
-    """Save an edit as a new version - every past version is kept, none overwritten."""
+def save_system_prompt(
+    content: str,
+    source: str = "manual",
+    source_proposal_id: str = None,
+    source_comment_id: str = None,
+) -> int:
+    """
+    Save an edit as a new version - every past version is kept, none
+    overwritten. `source` distinguishes a human editing the System Prompt
+    page directly ("manual") from a triage-agent proposal a human approved
+    ("proposal") - see prompt_proposal_store.py's approve_proposal(), the
+    only other caller that passes source="proposal".
+    """
     collection = get_db()["system_prompts"]
     latest = collection.find_one({}, sort=[("version", -1)])
     next_version = (latest["version"] + 1) if latest else 1
     collection.insert_one(
-        {"version": next_version, "content": content, "updated_at": datetime.now(timezone.utc)}
+        {
+            "version": next_version,
+            "content": content,
+            "updated_at": datetime.now(timezone.utc),
+            "source": source,
+            "source_proposal_id": source_proposal_id,
+            "source_comment_id": source_comment_id,
+        }
     )
     return next_version
+
+
+def list_system_prompt_versions() -> list:
+    """Every past version, newest first - for the System Prompt page's Version History view."""
+    collection = get_db()["system_prompts"]
+    versions = list(collection.find({}, sort=[("version", -1)]))
+    for v in versions:
+        v["_id"] = str(v["_id"])
+    return versions

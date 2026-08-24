@@ -8,8 +8,9 @@
  */
 
 import logo from "../logo.png";
+import NotificationBell from "./NotificationBell.jsx";
 
-export default function AppShell({ badge, title, description, onLogout, children }) {
+export default function AppShell({ badge, title, description, onLogout, onNavigateToApprovals, children }) {
   return (
     <div className="executive-shell min-h-screen text-slate-900">
       <div className="exec-blob-mid" />
@@ -44,14 +45,14 @@ export default function AppShell({ badge, title, description, onLogout, children
                 · {description}
               </span>
             )}
-            {onLogout && (
-              <button
-                onClick={onLogout}
-                className="brand-button-ghost ml-auto px-3 py-1.5 text-xs"
-              >
-                Log out
-              </button>
-            )}
+            <div className="ml-auto flex items-center gap-2">
+              <NotificationBell onNavigateToApprovals={onNavigateToApprovals} />
+              {onLogout && (
+                <button onClick={onLogout} className="brand-button-ghost px-3 py-1.5 text-xs">
+                  Log out
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </header>
