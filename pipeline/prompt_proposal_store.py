@@ -23,7 +23,7 @@ either the anchor text is found and the edit is exact, or it isn't and
 nothing is touched.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from bson import ObjectId
@@ -65,7 +65,13 @@ def apply_edit(current_prompt: str, edit_type: str, anchor_text: str, new_text: 
 
 
 def save_prompt_proposal(context: dict, result: dict) -> Optional[str]:
-    """Stores one triage-agent prompt-fix proposal as pending. Best-effort, like draft_store.py's saves."""
+    """
+    Stores one triage-agent prompt-fix proposal as pending. Best-effort,
+    like draft_store.py's saves. Stores the full ai_context blob (same
+    shape CommentsSidebar.jsx renders via AiContextPanel) alongside it, so
+    a human reviewing this later sees the AI's original draft and
+    reasoning, not just the proposed fix.
+    """
     try:
         collection = get_db()["prompt_proposals"]
         doc = {
@@ -82,6 +88,13 @@ def save_prompt_proposal(context: dict, result: dict) -> Optional[str]:
             "anchor_text": result.get("anchor_text", ""),
             "new_text": result.get("new_text", ""),
             "contradiction_check": result.get("contradiction_check", ""),
+            # Kept as their own top-level fields, not just nested inside
+            # ai_context - shown directly on the card, not buried behind
+            # the collapsed AI-context panel.
+            "customer_message": context.get("customer_message"),
+            "ai_draft_reply": context.get("ai_draft_reply"),
+            "ai_context": context.get("ai_context"),
+            "source_escalation_id": context.get("source_escalation_id"),
             "created_at": datetime.now(timezone.utc),
             "reviewed_at": None,
             "reviewed_outcome_version": None,
@@ -96,6 +109,131 @@ def get_pending_proposals() -> list:
     collection = get_db()["prompt_proposals"]
     docs = collection.find({"status": "pending"}, sort=[("created_at", -1)])
     return [_serialize(d) for d in docs]
+
+
+def count_pending_proposals() -> int:
+    """Count only, no documents fetched - for the notifications bell, which polls this every 45s from every open tab."""
+    return get_db()["prompt_proposals"].count_documents({"status": "pending"})
+
+
+# Default page size for get_all_proposals() - well above every real
+# proposal count seen live so far, so paginating in doesn't change today's
+# behavior at all; it just puts a ceiling on how much a single request can
+# ever return once that stops being true. See the Vercel/MongoDB audit -
+# this collection had no limit at all before.
+DEFAULT_PAGE_SIZE = 200
+
+
+def get_all_proposals(status: Optional[str] = None, page: int = 1, limit: int = DEFAULT_PAGE_SIZE) -> tuple:
+    """
+    Every proposal regardless of outcome, newest first, one page at a
+    time - for the Pending Approvals page's history view. Returns
+    (proposals, total_count) so the caller can show "N of M" or paginate
+    further without a second round trip just to know the total.
+    """
+    collection = get_db()["prompt_proposals"]
+    query = {"status": status} if status else {}
+    total = collection.count_documents(query)
+    page = max(1, page)
+    limit = max(1, min(limit, 500))  # hard ceiling - never let a client ask for "everything" again
+    docs = collection.find(query, sort=[("created_at", -1)]).skip((page - 1) * limit).limit(limit)
+    return [_serialize(d) for d in docs], total
+
+
+# Every bucket the UI groups a status into - see PendingApprovalsPage's
+# bucketOf() on the frontend, mirrored here so the aggregation below
+# produces the exact same 4 buckets without the frontend ever downloading
+# a raw status list to bucket itself.
+_BUCKET_EXPR = {
+    "$switch": {
+        "branches": [
+            {"case": {"$eq": ["$status", "pending"]}, "then": "pending"},
+            {"case": {"$eq": ["$status", "approved"]}, "then": "implemented"},
+            {"case": {"$eq": ["$status", "rejected"]}, "then": "rejected"},
+        ],
+        "default": "needs_attention",  # already_covered, needs_manual_review
+    }
+}
+
+
+def get_proposal_stats() -> dict:
+    """
+    The counts PendingApprovalsPage's stat cards/donut/filter-tabs need,
+    computed by MongoDB instead of downloaded-then-reduced in the browser
+    (see the analytics-architecture section of the Vercel/MongoDB audit).
+    Returns the same shape the old client-side useMemo produced, plus
+    non_override_total (every proposal NOT created by a human override -
+    the frontend needs this one extra number to compute "Total Triaged"
+    without double-counting an overridden escalation's own proposal record).
+    """
+    collection = get_db()["prompt_proposals"]
+    week_cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+
+    pipeline = [
+        {
+            "$facet": {
+                "all_time": [
+                    {"$group": {"_id": _BUCKET_EXPR, "count": {"$sum": 1}}},
+                ],
+                "this_week": [
+                    {"$match": {"created_at": {"$gte": week_cutoff}}},
+                    {"$group": {"_id": _BUCKET_EXPR, "count": {"$sum": 1}}},
+                ],
+                "non_override_total": [
+                    {"$match": {"trigger_type": {"$ne": "override"}}},
+                    {"$count": "count"},
+                ],
+            }
+        }
+    ]
+    result = list(collection.aggregate(pipeline))[0]
+
+    counts = {"pending": 0, "implemented": 0, "rejected": 0, "needs_attention": 0}
+    week_counts = {"pending": 0, "implemented": 0, "rejected": 0, "needs_attention": 0}
+    for row in result["all_time"]:
+        counts[row["_id"]] = row["count"]
+    for row in result["this_week"]:
+        week_counts[row["_id"]] = row["count"]
+    non_override_total = result["non_override_total"][0]["count"] if result["non_override_total"] else 0
+
+    return {
+        "counts": counts,
+        "weekCounts": week_counts,
+        "total": sum(counts.values()),
+        "non_override_total": non_override_total,
+    }
+
+
+def create_proposal_from_override(escalation: dict, override_note: str, author: str) -> Optional[str]:
+    """
+    A human disagreed with a triage verdict (see api.py's POST
+    /escalations/{id}/override) and wants a real fix drafted anyway. Runs
+    the same anchor-based drafting logic (triage_agent.py's
+    draft_fix_from_override()) against the current live prompt, then
+    stores it as a normal pending proposal - it still needs a separate
+    Approve click, same as any other proposal, the override doesn't apply
+    anything by itself.
+    """
+    from triage_agent import draft_fix_from_override
+
+    result = draft_fix_from_override(escalation, override_note)
+    if not result.get("anchor_text") or not result.get("new_text"):
+        return None
+
+    context = {
+        "trigger_type": "override",
+        "comment_id": escalation.get("comment_id"),
+        "thread_id": escalation.get("thread_id"),
+        "seq": escalation.get("seq"),
+        "order_id": escalation.get("order_id"),
+        "author": author,
+        "source_text": override_note,
+        "customer_message": escalation.get("customer_message"),
+        "ai_draft_reply": escalation.get("ai_draft_reply"),
+        "ai_context": escalation.get("ai_context"),
+        "source_escalation_id": escalation.get("_id"),
+    }
+    return save_prompt_proposal(context, result)
 
 
 def get_proposal(proposal_id: str) -> Optional[dict]:

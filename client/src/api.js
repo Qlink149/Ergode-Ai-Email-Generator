@@ -180,19 +180,19 @@ export async function saveSystemPrompt(content) {
   });
 }
 
-/** Every past system-prompt version, newest first - for the Version History view. */
+/** Every past system-prompt version, newest first, PREVIEW TEXT ONLY (content_preview/content_length, not the full content) - see fetchSystemPromptVersionContent for the full text of one version. */
 export async function fetchSystemPromptVersions() {
   return apiFetch("/api/system-prompt/versions");
+}
+
+/** One version's full text - call only when a History card is expanded or right before Restore, never for the list. */
+export async function fetchSystemPromptVersionContent(versionId) {
+  return apiFetch(`/api/system-prompt/versions/${versionId}`);
 }
 
 /** Unread counts for the header's notification bell - pending proposals + unseen escalations. */
 export async function fetchNotificationsSummary() {
   return apiFetch("/api/notifications");
-}
-
-/** Prompt-fix proposals still awaiting an Approve/Reject decision. */
-export async function fetchPendingProposals() {
-  return apiFetch("/api/proposals");
 }
 
 /** Applies a proposal's full proposed text as the new live system-prompt version. */
@@ -205,9 +205,33 @@ export async function rejectProposal(id) {
   return apiFetch(`/api/proposals/${id}/reject`, { method: "POST" });
 }
 
-/** Code/data-restriction escalations from the triage agent. Pass "unseen" to filter. */
-export async function fetchEscalations(status) {
-  return apiFetch(`/api/escalations${status ? `?status=${status}` : ""}`);
+/**
+ * One page of proposals regardless of outcome (approved/rejected/
+ * already_covered/needs_manual_review), for the history view. Returns
+ * {proposals, total, page, limit} - `total` is the REAL total count (from
+ * MongoDB), not proposals.length, since proposals is just this one page.
+ */
+export async function fetchProposalHistory(status, { page = 1, limit = 200 } = {}) {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (status) params.set("status", status);
+  return apiFetch(`/api/proposals/history?${params.toString()}`);
+}
+
+/** Bucket + week-over-week counts for the stat cards/donut/filter-tab counts, computed by MongoDB - not by downloading every proposal and reducing it in the browser. */
+export async function fetchProposalStats() {
+  return apiFetch("/api/proposals/stats");
+}
+
+/** One page of code/data-restriction escalations from the triage agent. Pass "unseen" to filter. Returns {escalations, total, page, limit}. */
+export async function fetchEscalations(status, { page = 1, limit = 200 } = {}) {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (status) params.set("status", status);
+  return apiFetch(`/api/escalations?${params.toString()}`);
+}
+
+/** Counts by type for EscalationSection's stat bar, computed by MongoDB. */
+export async function fetchEscalationStats() {
+  return apiFetch("/api/escalations/stats");
 }
 
 /** Marks a batch of escalations as seen - called once the Escalations section is actually viewed. */
@@ -216,5 +240,14 @@ export async function markEscalationsSeen(ids) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ids }),
+  });
+}
+
+/** Disagrees with a triage verdict - drafts a real prompt-fix proposal from a human note, added to the same pending queue (still needs its own Approve). */
+export async function overrideEscalation(id, note, author) {
+  return apiFetch(`/api/escalations/${id}/override`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ note, author }),
   });
 }

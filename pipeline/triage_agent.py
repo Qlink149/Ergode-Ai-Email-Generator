@@ -326,3 +326,95 @@ def recheck_and_merge_proposal(current_prompt: str, proposal: dict, client: Opti
         result.setdefault(key, default)
 
     return result
+
+
+OVERRIDE_INSTRUCTIONS = """
+A human reviewed a piece of feedback the triage agent decided needed no
+prompt change (or flagged as a code/data gap instead) - and disagreed.
+They've written a note explaining why, and possibly what the fix should
+say. Your job is to draft that fix, not to re-decide whether one is
+needed - the human has already made that call.
+
+You will be given: the original feedback/comment or edited draft text,
+the triage agent's own earlier reasoning for its "no fix needed" verdict
+(read this - the human's note may be directly responding to it, e.g.
+"that's wrong, it does NOT already say that" or "the contradiction is
+fine because X"), the human's override note, and the CURRENT live system
+prompt in full.
+
+Draft the fix exactly as in the main triage task: it is applied by exact,
+literal text search-and-splice in code, NOT by rewriting the whole
+prompt, so anchor_text must be copied perfectly, character for character,
+from the current live prompt above.
+
+Return a JSON object with exactly these fields:
+- "edit_type": "insert_after" (add new_text as a new rule right after an
+  existing passage) or "replace" (swap an existing passage out for
+  new_text entirely - use this when the human's note says an existing
+  rule is wrong or contradicts the fix, and should be changed).
+- "anchor_text": an EXACT, VERBATIM copy-paste of a short passage - one
+  sentence or bullet line - that exists, word-for-word, in the current
+  live prompt above. Must appear exactly ONCE in the prompt.
+- "new_text": the new or replacement wording, reflecting what the human
+  actually asked for in their note.
+- "contradiction_check": one or two sentences confirming this was checked
+  against the rest of the current prompt for conflicts - if the human's
+  note itself said an existing rule should be removed/changed, confirm
+  that's handled via edit_type "replace" rather than left as a
+  contradiction.
+- "reason": one or two sentences summarizing the fix for the record.
+
+Return ONLY the JSON object, no other text.
+"""
+
+_OVERRIDE_FALLBACK = {
+    "edit_type": "",
+    "anchor_text": "",
+    "new_text": "",
+    "contradiction_check": "",
+    "reason": "Override could not be parsed - no fix was drafted.",
+}
+
+
+def draft_fix_from_override(escalation: dict, override_note: str, client: Optional[OpenAI] = None) -> dict:
+    """
+    Called when a human overrides a triage verdict they disagree with
+    (see api.py's POST /escalations/{id}/override and
+    prompt_proposal_store.py's create_proposal_from_override()). Unlike
+    run_triage(), this never returns "none" - the human has already
+    decided a fix is warranted; this only drafts it, against the CURRENT
+    live prompt, using the same anchor-based approach as everywhere else.
+    """
+    require_openai_key()
+    client = client or OpenAI(api_key=OPENAI_API_KEY)
+
+    current_prompt = load_system_prompt()
+    user_content = (
+        f"Original feedback:\n{escalation.get('source_text', '')}"
+        f"\n\nTriage agent's earlier reasoning for its verdict ({escalation.get('type', 'none')}):"
+        f"\n{escalation.get('reason', '')}"
+        f"\n\nHuman's override note:\n{override_note}"
+        f"\n\n-----\n\nCurrent live system prompt, in full:\n{current_prompt}"
+    )
+    messages = [
+        {"role": "system", "content": OVERRIDE_INSTRUCTIONS},
+        {"role": "user", "content": user_content},
+    ]
+    kwargs = {"model": OPENAI_MODEL, "messages": messages, "response_format": {"type": "json_object"}}
+
+    try:
+        response = client.chat.completions.create(**kwargs, temperature=0)
+    except BadRequestError as err:
+        if "temperature" not in str(err):
+            raise
+        response = client.chat.completions.create(**kwargs)
+
+    try:
+        result = json.loads(response.choices[0].message.content)
+    except (json.JSONDecodeError, TypeError):
+        return dict(_OVERRIDE_FALLBACK)
+
+    for key, default in _OVERRIDE_FALLBACK.items():
+        result.setdefault(key, default)
+
+    return result

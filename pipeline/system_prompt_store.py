@@ -9,9 +9,16 @@ every call rather than cached.
 """
 
 from datetime import datetime, timezone
+from typing import Optional
+
+from bson import ObjectId
 
 from config import SYSTEM_PROMPT_SEED_PATH
 from db import get_db
+
+# How much of a version's content the collapsed History card shows before
+# "Restore"/expand needs the real thing - see list_system_prompt_versions().
+_PREVIEW_LENGTH = 220
 
 
 def load_system_prompt() -> str:
@@ -72,9 +79,47 @@ def save_system_prompt(
 
 
 def list_system_prompt_versions() -> list:
-    """Every past version, newest first - for the System Prompt page's Version History view."""
+    """
+    Every past version, newest first, for the System Prompt page's Version
+    History LIST view - deliberately NOT the full content field. That field
+    is the whole prompt text (tens of KB, and this collection never shrinks -
+    live data has already reached version 60+), and the list view only ever
+    renders a ~220-char preview per row (see PromptVersionHistory.jsx)
+    until a specific version is expanded. Fetching every version's full
+    text for a list of previews was confirmed to already cost several MB
+    per page load - this aggregation computes just the preview + its true
+    length (so the UI can still show "…" correctly) server-side instead.
+    Full text for one version is a separate, on-demand call - see
+    get_system_prompt_version_content() below.
+    """
     collection = get_db()["system_prompts"]
-    versions = list(collection.find({}, sort=[("version", -1)]))
+    versions = list(
+        collection.aggregate(
+            [
+                {"$sort": {"version": -1}},
+                {
+                    "$project": {
+                        "version": 1,
+                        "updated_at": 1,
+                        "source": 1,
+                        "source_proposal_id": 1,
+                        "source_comment_id": 1,
+                        "content_preview": {"$substrCP": ["$content", 0, _PREVIEW_LENGTH]},
+                        "content_length": {"$strLenCP": "$content"},
+                    }
+                },
+            ]
+        )
+    )
     for v in versions:
         v["_id"] = str(v["_id"])
     return versions
+
+
+def get_system_prompt_version_content(version_id: str) -> Optional[dict]:
+    """One version's full text, fetched on demand - only when a History card is expanded or Restored, never for the list."""
+    collection = get_db()["system_prompts"]
+    doc = collection.find_one({"_id": ObjectId(version_id)}, projection={"version": 1, "content": 1})
+    if not doc:
+        return None
+    return {"version": doc["version"], "content": doc["content"]}

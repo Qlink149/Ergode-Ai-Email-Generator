@@ -14,8 +14,9 @@ export default function AiContextPanel({
   reasoning,
   policyApplied,
   fieldsUsed = [],
+  defaultOpen = false,
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const facts = context.order_facts;
 
   return (

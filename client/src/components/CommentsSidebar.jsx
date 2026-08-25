@@ -4,6 +4,7 @@ import { X, MessageSquareText, Clock3 } from "lucide-react";
 import { fetchRecentComments } from "../api.js";
 import AiContextPanel from "./AiContextPanel.jsx";
 import EscalationBadge from "./EscalationBadge.jsx";
+import SnapshotBlock from "./SnapshotBlock.jsx";
 
 /**
  * CommentsSidebar.jsx
@@ -33,22 +34,6 @@ function formatTimestamp(iso) {
   } catch {
     return iso;
   }
-}
-
-function SnapshotBlock({ label, text, tone }) {
-  if (!text) return null;
-  const toneClasses =
-    tone === "violet"
-      ? "border-[rgb(var(--violet-rgb)/0.18)] bg-[rgb(var(--violet-rgb)/0.05)]"
-      : "border-[rgb(var(--navy-rgb)/0.08)] bg-[rgb(var(--navy-rgb)/0.02)]";
-  const labelClass = tone === "violet" ? "text-[var(--violet)]" : "text-[var(--muted)]";
-
-  return (
-    <div className={`min-w-0 rounded-lg border p-2.5 ${toneClasses}`}>
-      <p className={`text-[10px] font-semibold uppercase tracking-wide ${labelClass}`}>{label}</p>
-      <p className="mt-1 min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed">{text}</p>
-    </div>
-  );
 }
 
 export default function CommentsSidebar({ isOpen, onClose }) {

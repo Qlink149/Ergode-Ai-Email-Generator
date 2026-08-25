@@ -42,6 +42,21 @@ router.get("/versions", async (req, res) => {
   }
 });
 
+router.get("/versions/:id", async (req, res) => {
+  try {
+    const response = await fetch(`${PIPELINE_URL}/system-prompt/versions/${req.params.id}`, {
+      headers: { Authorization: `Bearer ${computeToken()}` },
+    });
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (err) {
+    res.status(502).json({
+      error: "Could not reach the AI pipeline service. Is it running (uvicorn api:app --port 8001)?",
+      detail: err.message,
+    });
+  }
+});
+
 router.put("/", async (req, res) => {
   try {
     const response = await fetch(`${PIPELINE_URL}/system-prompt`, {

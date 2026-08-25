@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronRight, RotateCcw, CheckCircle2 } from "lucide-react";
-import { fetchSystemPromptVersions, saveSystemPrompt } from "../api.js";
+import { fetchSystemPromptVersions, fetchSystemPromptVersionContent, saveSystemPrompt } from "../api.js";
 
 function formatTimestamp(iso) {
   try {
@@ -12,15 +12,35 @@ function formatTimestamp(iso) {
 
 function VersionCard({ version, index, isCurrent, onRestored }) {
   const [expanded, setExpanded] = useState(false);
+  const [fullContent, setFullContent] = useState(null);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentError, setContentError] = useState(null);
   const [restoring, setRestoring] = useState(false);
   const [restoreError, setRestoreError] = useState(null);
   const [justRestored, setJustRestored] = useState(false);
 
+  // The list response only carries a short preview (see
+  // system_prompt_store.py's list_system_prompt_versions) - the full text
+  // is fetched here, once, the first time this card is actually expanded,
+  // not for every version up front just in case one gets opened.
+  function handleToggleExpand() {
+    setExpanded((v) => !v);
+    if (fullContent === null && !contentLoading) {
+      setContentLoading(true);
+      setContentError(null);
+      fetchSystemPromptVersionContent(version._id)
+        .then((data) => setFullContent(data.content))
+        .catch((err) => setContentError(err.message))
+        .finally(() => setContentLoading(false));
+    }
+  }
+
   async function handleRestore() {
+    if (fullContent === null) return;
     setRestoring(true);
     setRestoreError(null);
     try {
-      await saveSystemPrompt(version.content);
+      await saveSystemPrompt(fullContent);
       setJustRestored(true);
       onRestored?.();
     } catch (err) {
@@ -35,10 +55,7 @@ function VersionCard({ version, index, isCurrent, onRestored }) {
       className="triage-item-in executive-card-soft space-y-2 p-4"
       style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
     >
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 text-left"
-      >
+      <button onClick={handleToggleExpand} className="flex w-full items-center justify-between gap-3 text-left">
         <div className="flex items-center gap-2">
           {expanded ? (
             <ChevronDown size={15} className="shrink-0 text-[var(--muted)]" />
@@ -53,8 +70,8 @@ function VersionCard({ version, index, isCurrent, onRestored }) {
 
       {!expanded && (
         <p className="line-clamp-2 whitespace-pre-wrap break-words text-sm text-[var(--muted)]">
-          {version.content.slice(0, 220)}
-          {version.content.length > 220 ? "…" : ""}
+          {version.content_preview}
+          {version.content_length > version.content_preview.length ? "…" : ""}
         </p>
       )}
 
@@ -67,14 +84,20 @@ function VersionCard({ version, index, isCurrent, onRestored }) {
 
       {expanded && (
         <div className="space-y-3 border-t border-[rgb(var(--navy-rgb)/0.08)] pt-3">
-          <pre className="brand-input max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded-lg px-3 py-2 font-mono text-xs leading-relaxed">
-            {version.content}
-          </pre>
+          {contentLoading && (
+            <p className="text-xs text-[var(--muted)]">Loading full text...</p>
+          )}
+          {contentError && <p className="text-xs text-[var(--executive-error)]">{contentError}</p>}
+          {fullContent !== null && (
+            <pre className="brand-input max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded-lg px-3 py-2 font-mono text-xs leading-relaxed">
+              {fullContent}
+            </pre>
+          )}
 
           <div className="flex items-center gap-3">
             <button
               onClick={handleRestore}
-              disabled={restoring || isCurrent}
+              disabled={restoring || isCurrent || fullContent === null}
               className="brand-button px-4 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
             >
               <RotateCcw size={13} />

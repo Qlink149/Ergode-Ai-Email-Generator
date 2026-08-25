@@ -21,6 +21,41 @@ router.get("/", async (req, res) => {
   }
 });
 
+router.get("/history", async (req, res) => {
+  try {
+    const params = new URLSearchParams();
+    if (req.query.status) params.set("status", req.query.status);
+    if (req.query.page) params.set("page", req.query.page);
+    if (req.query.limit) params.set("limit", req.query.limit);
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    const response = await fetch(`${PIPELINE_URL}/proposals/history${qs}`, {
+      headers: { Authorization: `Bearer ${computeToken()}` },
+    });
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (err) {
+    res.status(502).json({
+      error: "Could not reach the AI pipeline service. Is it running (uvicorn api:app --port 8001)?",
+      detail: err.message,
+    });
+  }
+});
+
+router.get("/stats", async (req, res) => {
+  try {
+    const response = await fetch(`${PIPELINE_URL}/proposals/stats`, {
+      headers: { Authorization: `Bearer ${computeToken()}` },
+    });
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (err) {
+    res.status(502).json({
+      error: "Could not reach the AI pipeline service. Is it running (uvicorn api:app --port 8001)?",
+      detail: err.message,
+    });
+  }
+});
+
 router.post("/:id/approve", async (req, res) => {
   try {
     const response = await fetch(`${PIPELINE_URL}/proposals/${req.params.id}/approve`, {

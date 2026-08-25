@@ -88,6 +88,10 @@ router.post("/", async (req, res) => {
           ai_policy_applied: comment.ai_context?.policy_applied,
           order_facts: comment.ai_context?.context?.order_facts,
           thread_history: comment.ai_context?.context?.thread_history,
+          // Full blob, passed through untouched - stored on the resulting
+          // proposal/escalation so PendingApprovalsPage.jsx can render it
+          // with the same AiContextPanel CommentsSidebar.jsx already uses.
+          ai_context: comment.ai_context,
         }),
       });
       triage = await triageResp.json();

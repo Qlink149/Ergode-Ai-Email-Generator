@@ -36,13 +36,29 @@ from system_prompt_store import (
     save_system_prompt,
     get_system_prompt_version,
     list_system_prompt_versions,
+    get_system_prompt_version_content,
 )
 from analysis import analyze_message
 from draft_store import save_draft, save_draft_edit
 from translator import translate_to_english
 from triage_agent import run_and_persist_triage
-from prompt_proposal_store import get_pending_proposals, approve_proposal, reject_proposal
-from escalation_store import get_escalations, mark_escalations_seen, count_unseen_escalations
+from prompt_proposal_store import (
+    get_pending_proposals,
+    get_all_proposals,
+    get_proposal_stats,
+    count_pending_proposals,
+    approve_proposal,
+    reject_proposal,
+    create_proposal_from_override,
+)
+from escalation_store import (
+    get_escalations,
+    get_escalation,
+    get_escalation_stats,
+    mark_escalations_seen,
+    count_unseen_escalations,
+    mark_escalation_overridden,
+)
 
 app = FastAPI(title="Ergode AI Pipeline")
 
@@ -188,8 +204,17 @@ def update_system_prompt(payload: SystemPromptPayload):
 
 @router.get("/system-prompt/versions", dependencies=[Depends(require_auth)])
 def system_prompt_versions():
-    """Every past version, newest first, for the System Prompt page's Version History view."""
+    """Every past version, newest first, preview text only - full content is a separate on-demand call (see below)."""
     return {"versions": list_system_prompt_versions()}
+
+
+@router.get("/system-prompt/versions/{version_id}", dependencies=[Depends(require_auth)])
+def system_prompt_version_content(version_id: str):
+    """One version's full text - called only when a History card is expanded, or right before Restore."""
+    result = get_system_prompt_version_content(version_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Version not found")
+    return result
 
 
 class DraftEditPayload(BaseModel):
@@ -214,6 +239,18 @@ def edit_draft(payload: DraftEditPayload):
     try:
         ctx = result.get("context") or {}
         analysis = result.get("analysis") or {}
+        # Same shape as the ai_context object GenerateWithAiPanel.jsx builds
+        # and comments already carry (context/reasoning/policy_applied/
+        # fields_used) - so AiContextPanel.jsx can render it identically
+        # here, even though this generation was never a Comment. No
+        # system_prompt_version/thread_meta on hand for a draft edit -
+        # AiContextPanel.jsx handles missing threadMeta fine already.
+        ai_context = {
+            "context": ctx,
+            "reasoning": analysis.get("reasoning"),
+            "policy_applied": analysis.get("policy_applied"),
+            "fields_used": analysis.get("fields_used"),
+        }
         run_and_persist_triage(
             {
                 "trigger_type": "draft_edit",
@@ -228,6 +265,7 @@ def edit_draft(payload: DraftEditPayload):
                 "ai_policy_applied": analysis.get("policy_applied"),
                 "order_facts": ctx.get("order_facts"),
                 "thread_history": ctx.get("thread_history"),
+                "ai_context": ai_context,
             }
         )
     except Exception:
@@ -255,6 +293,11 @@ class TriageRequest(BaseModel):
     ai_policy_applied: Optional[str] = None
     order_facts: Optional[dict] = None
     thread_history: Optional[List[dict]] = None
+    # Same shape AiContextPanel.jsx already renders for comments - carried
+    # through untouched so a human reviewing a proposal/escalation later
+    # sees the AI's original draft and reasoning, not just the triage
+    # agent's verdict on it.
+    ai_context: Optional[dict] = None
 
 
 @router.post("/triage", dependencies=[Depends(require_auth)])
@@ -267,6 +310,19 @@ def triage(payload: TriageRequest):
 def list_proposals():
     """Pending prompt-fix proposals, for the Pending Approvals page."""
     return {"proposals": get_pending_proposals()}
+
+
+@router.get("/proposals/history", dependencies=[Depends(require_auth)])
+def proposals_history(status: Optional[str] = None, page: int = 1, limit: int = 200):
+    """One page of proposals regardless of outcome, for the Pending Approvals page's history view."""
+    proposals, total = get_all_proposals(status, page=page, limit=limit)
+    return {"proposals": proposals, "total": total, "page": page, "limit": limit}
+
+
+@router.get("/proposals/stats", dependencies=[Depends(require_auth)])
+def proposals_stats():
+    """Bucket/week-over-week counts, computed by MongoDB - what the stat cards/donut/filter-tab counts need, without downloading every proposal to count them in the browser."""
+    return get_proposal_stats()
 
 
 @router.post("/proposals/{proposal_id}/approve", dependencies=[Depends(require_auth)])
@@ -299,8 +355,15 @@ def reject(proposal_id: str):
 
 
 @router.get("/escalations", dependencies=[Depends(require_auth)])
-def list_escalations(status: Optional[str] = None):
-    return {"escalations": get_escalations(status)}
+def list_escalations(status: Optional[str] = None, page: int = 1, limit: int = 200):
+    escalations, total = get_escalations(status, page=page, limit=limit)
+    return {"escalations": escalations, "total": total, "page": page, "limit": limit}
+
+
+@router.get("/escalations/stats", dependencies=[Depends(require_auth)])
+def escalations_stats():
+    """Counts by type, computed by MongoDB - what EscalationSection's stat bar needs."""
+    return get_escalation_stats()
 
 
 class EscalationSeenPayload(BaseModel):
@@ -313,10 +376,40 @@ def escalations_seen(payload: EscalationSeenPayload):
     return {"status": "ok", "updated": count}
 
 
+class EscalationOverridePayload(BaseModel):
+    note: str
+    author: str
+
+
+@router.post("/escalations/{escalation_id}/override", dependencies=[Depends(require_auth)])
+def override_escalation(escalation_id: str, payload: EscalationOverridePayload):
+    """
+    A human disagrees with a triage verdict (most often "none") and wants
+    a real prompt fix drafted from it. Drafts one against the CURRENT live
+    prompt and creates a normal pending proposal from it - this endpoint
+    never touches the live prompt itself, the resulting proposal still
+    needs a separate Approve.
+    """
+    escalation = get_escalation(escalation_id)
+    if escalation is None:
+        raise HTTPException(status_code=404, detail="Escalation not found")
+
+    proposal_id = create_proposal_from_override(escalation, payload.note, payload.author)
+    if proposal_id is None:
+        raise HTTPException(status_code=502, detail="Could not draft a fix from this override - try a more specific note.")
+
+    mark_escalation_overridden(escalation_id, proposal_id)
+    return {"status": "proposal_created", "proposal_id": proposal_id}
+
+
 @router.get("/notifications/summary", dependencies=[Depends(require_auth)])
 def notifications_summary():
+    # count_documents, not len(get_pending_proposals()) - this is polled
+    # every 45s from every open tab (NotificationBell.jsx); the old version
+    # fetched every pending proposal's FULL document (including ai_context)
+    # just to measure how many there were.
     return {
-        "pending_proposals_count": len(get_pending_proposals()),
+        "pending_proposals_count": count_pending_proposals(),
         "unseen_escalations_count": count_unseen_escalations(),
     }
 
