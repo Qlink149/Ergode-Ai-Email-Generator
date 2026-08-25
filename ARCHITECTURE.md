@@ -216,7 +216,7 @@ flowchart TD
     PP -->|human clicks Reject| Rejected[Rejected — nothing changed]
     PP -->|human clicks Approve| RC[Recheck against the CURRENT live prompt]
     RC -->|already covered by now| AC[already_covered — nothing changed]
-    RC -->|not covered| SP[apply_edit&#40;&#41; — deterministic code splice]
+    RC -->|not covered| SP[apply_edit — deterministic code splice]
     SP -->|anchor text found exactly once| Live[New system-prompt version, live]
     SP -->|anchor not found / found twice| NMR[needs_manual_review — nothing changed]
     E -.human disagrees, clicks Override.-> PP
