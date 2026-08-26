@@ -70,7 +70,18 @@ def get_db():
     if not MONGODB_URI:
         raise RuntimeError("MONGODB_URI is not configured.")
     if _client is None:
-        _client = MongoClient(MONGODB_URI)
+        # tz_aware=True: without it, PyMongo hands back naive datetimes for
+        # every stored field (created_at, updated_at, etc.) even though
+        # they were saved as UTC (datetime.now(timezone.utc)) - FastAPI then
+        # serializes them with no timezone suffix at all (e.g.
+        # "2026-08-26T05:18:03"), and the browser's `new Date(...)` treats
+        # a timestamp with no offset as LOCAL time, not UTC. Confirmed
+        # directly: every timestamp in the UI was reading ~5.5 hours off
+        # (India's UTC offset) because of this. tz_aware=True makes PyMongo
+        # attach real UTC tzinfo, so the JSON comes out with a proper "+00:00"
+        # and the browser converts it to local time correctly instead of
+        # misreading it as already-local.
+        _client = MongoClient(MONGODB_URI, tz_aware=True)
     db = _client[MONGODB_DB_NAME]
     if not _indexes_ready:
         _ensure_indexes(db)
