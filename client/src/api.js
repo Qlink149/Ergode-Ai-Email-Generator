@@ -222,10 +222,11 @@ export async function fetchProposalStats() {
   return apiFetch("/api/proposals/stats");
 }
 
-/** One page of code/data-restriction escalations from the triage agent. Pass "unseen" to filter. Returns {escalations, total, page, limit}. */
-export async function fetchEscalations(status, { page = 1, limit = 200 } = {}) {
+/** One page of code/data-restriction escalations from the triage agent. Pass status ("unseen") and/or type ("none"/"code_restriction"/"data_restriction") to filter. Returns {escalations, total, page, limit}. */
+export async function fetchEscalations(status, { page = 1, limit = 200, type } = {}) {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (status) params.set("status", status);
+  if (type) params.set("type", type);
   return apiFetch(`/api/escalations?${params.toString()}`);
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, X, CheckCircle2, ArrowDown, FileSearch, Quote } from "lucide-react";
 import { approveProposal, rejectProposal } from "../../api.js";
+import FormattedText from "../../components/FormattedText.jsx";
 import { SectionHeading, CaseDetail } from "./SharedBits.jsx";
 import {
   STATUS_LABEL,
@@ -30,7 +31,9 @@ function ChangeFlowStep({ label, text, tint, isLast }) {
           <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: tint.iconFg }}>
             {label}
           </p>
-          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm font-medium leading-relaxed">{text}</p>
+          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm font-medium leading-relaxed">
+            <FormattedText text={text} />
+          </p>
         </div>
       </div>
       {!isLast && (
@@ -182,7 +185,9 @@ export default function ProposalDetailPanel({ proposal, onDecided, onClose }) {
               <p className="text-[10px] font-semibold uppercase tracking-wide text-[rgb(var(--royal-rgb)/1)]">
                 Contradiction check
               </p>
-              <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed">{proposal.contradiction_check}</p>
+              <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed">
+                <FormattedText text={proposal.contradiction_check} />
+              </p>
             </div>
           )}
 

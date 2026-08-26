@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { ChevronRight, MessageSquareWarning, X } from "lucide-react";
+import { MessageSquareWarning, X } from "lucide-react";
 import { overrideEscalation } from "../../api.js";
 import EscalationBadge from "../../components/EscalationBadge.jsx";
-import { CaseDetail, AuthorAvatar } from "./SharedBits.jsx";
+import { CaseDetail } from "./SharedBits.jsx";
 import { formatTimestamp } from "./constants.js";
 
 /**
@@ -125,47 +125,6 @@ function OverrideForm({ escalation, onCreated }) {
   );
 }
 
-export function EscalationRow({ escalation, selected, onSelect }) {
-  // "unseen" means nobody has opened the Pending Approvals page since this
-  // was created - a real "new since your last visit" signal, not just a
-  // generic status. It gets marked "seen" server-side the moment the page
-  // loads (see PendingApprovalsPage.jsx's loadEscalations), but the local
-  // list state captured at that same fetch still correctly reflects
-  // whatever it was AT LOAD TIME, so this stays accurate for the rest of
-  // this page view even after the server-side flip.
-  const isNew = escalation.status === "unseen";
-
-  return (
-    <button
-      onClick={() => onSelect(escalation._id)}
-      className={`relative flex w-full min-w-0 items-center gap-3 border-b border-[rgb(var(--navy-rgb)/0.06)] py-3 pl-4 pr-3 text-left transition-colors last:border-b-0 hover:bg-[rgb(var(--navy-rgb)/0.03)] ${
-        selected ? "bg-[rgb(var(--violet-rgb)/0.07)]" : isNew ? "bg-[rgb(var(--violet-rgb)/0.03)]" : ""
-      }`}
-    >
-      {isNew && <span className="absolute left-0 top-0 h-full w-1 bg-[var(--violet)]" aria-hidden="true" />}
-      <AuthorAvatar name={escalation.author} />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          {isNew && (
-            <span
-              className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-              style={{ background: "rgb(var(--violet-rgb)/0.14)", color: "var(--violet)" }}
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-[var(--violet)]" />
-              New
-            </span>
-          )}
-          <EscalationBadge type={escalation.type} />
-          <span className="text-xs font-medium">{escalation.author}</span>
-          <span className="text-xs text-[var(--muted)]">· order {escalation.order_id || "—"}</span>
-        </div>
-        <p className="mt-0.5 truncate text-sm text-[var(--muted)]">{escalation.reason}</p>
-      </div>
-      <span className="hidden shrink-0 text-xs text-[var(--muted)] lg:block">{formatTimestamp(escalation.created_at)}</span>
-      <ChevronRight size={16} className="shrink-0 text-[var(--muted)]" />
-    </button>
-  );
-}
 
 export function EscalationDetailPanel({ escalation, onOverrideCreated, onClose }) {
   return (

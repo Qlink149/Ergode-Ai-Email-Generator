@@ -7,7 +7,7 @@ import {
   fetchEscalationStats,
   markEscalationsSeen,
 } from "../api.js";
-import { bucketOf } from "./pendingApprovals/constants.js";
+import { bucketOf, ESCALATION_TYPES } from "./pendingApprovals/constants.js";
 import ProposalsDashboardSection from "./pendingApprovals/ProposalsDashboardSection.jsx";
 import EscalationSection from "./pendingApprovals/EscalationSection.jsx";
 
@@ -68,6 +68,8 @@ export default function PendingApprovalsPage() {
   const [escalationsError, setEscalationsError] = useState(null);
   const [selectedEscalationId, setSelectedEscalationId] = useState(null);
   const [escalationFilter, setEscalationFilter] = useState("all");
+  const [escalationPage, setEscalationPage] = useState(1);
+  const [escalationLimit, setEscalationLimit] = useState(10);
 
   function loadProposals() {
     setProposalsLoading(true);
@@ -81,9 +83,18 @@ export default function PendingApprovalsPage() {
       .finally(() => setProposalsLoading(false));
   }
 
+  // escalationFilter can be "all", "prompt_fix" (handled entirely
+  // client-side from the proposals list - see proposalsByRecency below,
+  // not a real escalation field), or one of ESCALATION_TYPES - only the
+  // latter gets sent to the server as an actual `type` filter, so
+  // pagination stays accurate for whichever tab is active.
   function loadEscalations() {
     setEscalationsLoading(true);
-    Promise.all([fetchEscalations(), fetchEscalationStats()])
+    const type = ESCALATION_TYPES.includes(escalationFilter) ? escalationFilter : undefined;
+    Promise.all([
+      fetchEscalations(undefined, { page: escalationPage, limit: escalationLimit, type }),
+      fetchEscalationStats(),
+    ])
       .then(([list, stats]) => {
         setEscalations(list.escalations);
         setEscalationsTotal(list.total);
@@ -97,8 +108,23 @@ export default function PendingApprovalsPage() {
 
   useEffect(() => {
     loadProposals();
-    loadEscalations();
   }, []);
+
+  // Re-fetches whenever the filter tab, page, or rows-per-page changes -
+  // also covers the initial load, since this effect fires on mount too.
+  useEffect(() => {
+    loadEscalations();
+  }, [escalationFilter, escalationPage, escalationLimit]);
+
+  function handleEscalationFilterChange(nextFilter) {
+    setEscalationFilter(nextFilter);
+    setEscalationPage(1); // changing filters invalidates whatever page you were on
+  }
+
+  function handleEscalationLimitChange(nextLimit) {
+    setEscalationLimit(nextLimit);
+    setEscalationPage(1);
+  }
 
   // Filters/searches within the page of proposals actually fetched (up to
   // 200 - see fetchProposalHistory) rather than a full unbounded history.
@@ -132,11 +158,6 @@ export default function PendingApprovalsPage() {
   // the same MongoDB aggregation as everything else in proposalStats).
   const totalTriaged = escalationStats.total + proposalStats.non_override_total;
 
-  const filteredEscalations = useMemo(
-    () => (escalationFilter === "all" ? escalations : escalations.filter((e) => e.type === escalationFilter)),
-    [escalations, escalationFilter]
-  );
-
   // "Prompt Fix" isn't an escalation type - those items are proposals. When
   // that filter is active, this section shows the actual proposal rows
   // (newest first) right here instead of trying to filter the escalation
@@ -145,6 +166,12 @@ export default function PendingApprovalsPage() {
     () => [...proposals].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
     [proposals]
   );
+
+  // For EscalationTable's STATUS column - an overridden escalation's real
+  // status is its resulting proposal's status (pending/approved/rejected),
+  // looked up by id rather than fetched again, since the proposals list is
+  // already in memory here.
+  const proposalsById = useMemo(() => new Map(proposals.map((p) => [p._id, p])), [proposals]);
 
   function handleDecided() {
     loadProposals();
@@ -204,15 +231,15 @@ export default function PendingApprovalsPage() {
         loading={escalationsLoading}
         error={escalationsError}
         escalations={escalations}
-        fetchedCount={escalations.length}
         totalCount={escalationsTotal}
         totalTriaged={totalTriaged}
         promptFixValue={proposalStats.total}
         escalationStats={escalationStats}
         escalationFilter={escalationFilter}
-        setEscalationFilter={setEscalationFilter}
-        filteredEscalations={filteredEscalations}
+        setEscalationFilter={handleEscalationFilterChange}
+        filteredEscalations={escalations}
         proposalsByRecency={proposalsByRecency}
+        proposalsById={proposalsById}
         selectedId={selectedId}
         setSelectedId={setSelectedId}
         selectedProposal={selected}
@@ -221,6 +248,10 @@ export default function PendingApprovalsPage() {
         selectedEscalation={selectedEscalation}
         onDecided={handleDecided}
         onOverrideCreated={handleOverrideCreated}
+        page={escalationPage}
+        limit={escalationLimit}
+        onPageChange={setEscalationPage}
+        onLimitChange={handleEscalationLimitChange}
       />
     </div>
   );

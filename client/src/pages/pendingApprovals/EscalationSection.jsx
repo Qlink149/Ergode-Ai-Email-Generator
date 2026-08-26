@@ -1,8 +1,10 @@
 import { AlertCircle, Inbox, Layers } from "lucide-react";
 import Modal from "../../components/Modal.jsx";
-import { EscalationStatBarItem, EscalationRow, EscalationDetailPanel } from "./EscalationPanel.jsx";
+import { EscalationStatBarItem, EscalationDetailPanel } from "./EscalationPanel.jsx";
+import { EscalationTableHeader, EscalationTableRow } from "./EscalationTable.jsx";
 import { ProposalTableHeader, ProposalRow } from "./ProposalTable.jsx";
 import ProposalDetailPanel from "./ProposalDetailPanel.jsx";
+import Pagination from "./Pagination.jsx";
 import { ESCALATION_TYPE_META, ESCALATION_TYPES, PROMPT_FIX_STAT_META } from "./constants.js";
 
 /**
@@ -19,7 +21,6 @@ export default function EscalationSection({
   loading,
   error,
   escalations,
-  fetchedCount,
   totalCount,
   totalTriaged,
   promptFixValue,
@@ -28,6 +29,7 @@ export default function EscalationSection({
   setEscalationFilter,
   filteredEscalations,
   proposalsByRecency,
+  proposalsById,
   selectedId,
   setSelectedId,
   selectedProposal,
@@ -36,6 +38,10 @@ export default function EscalationSection({
   selectedEscalation,
   onDecided,
   onOverrideCreated,
+  page,
+  limit,
+  onPageChange,
+  onLimitChange,
 }) {
   return (
     <section className="space-y-3">
@@ -93,11 +99,6 @@ export default function EscalationSection({
           </div>
 
           <div className="executive-card overflow-hidden p-0">
-            {escalationFilter !== "prompt_fix" && totalCount > fetchedCount && (
-              <p className="border-b border-[rgb(var(--navy-rgb)/0.06)] px-3 py-2 text-[11px] text-[var(--muted)]">
-                Showing the {fetchedCount} most recent of {totalCount}. Narrow with a filter to find an older one.
-              </p>
-            )}
             {escalationFilter === "prompt_fix" ? (
               proposalsByRecency.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 p-8 text-center text-sm text-[var(--muted)]">
@@ -118,9 +119,19 @@ export default function EscalationSection({
                 Nothing matches this filter.
               </div>
             ) : (
-              filteredEscalations.map((e) => (
-                <EscalationRow key={e._id} escalation={e} selected={e._id === selectedEscalationId} onSelect={setSelectedEscalationId} />
-              ))
+              <>
+                <EscalationTableHeader />
+                {filteredEscalations.map((e) => (
+                  <EscalationTableRow
+                    key={e._id}
+                    escalation={e}
+                    selected={e._id === selectedEscalationId}
+                    onSelect={setSelectedEscalationId}
+                    proposalsById={proposalsById}
+                  />
+                ))}
+                <Pagination page={page} limit={limit} total={totalCount} onPageChange={onPageChange} onLimitChange={onLimitChange} />
+              </>
             )}
           </div>
 

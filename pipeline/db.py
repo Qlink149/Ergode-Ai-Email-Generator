@@ -57,6 +57,7 @@ def _ensure_indexes(db) -> None:
     db["prompt_proposals"].create_index([("created_at", DESCENDING)])
 
     db["escalations"].create_index([("status", ASCENDING), ("created_at", DESCENDING)])
+    db["escalations"].create_index([("type", ASCENDING), ("created_at", DESCENDING)])
     db["escalations"].create_index([("created_at", DESCENDING)])
 
     db["ai_drafts"].create_index([("thread_id", ASCENDING), ("seq", ASCENDING), ("generated_at", DESCENDING)])

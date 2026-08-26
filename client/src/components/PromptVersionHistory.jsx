@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronRight, RotateCcw, CheckCircle2 } from "lucide-react";
 import { fetchSystemPromptVersions, fetchSystemPromptVersionContent, saveSystemPrompt } from "../api.js";
+import FormattedText from "./FormattedText.jsx";
 
 function formatTimestamp(iso) {
   try {
@@ -70,7 +71,7 @@ function VersionCard({ version, index, isCurrent, onRestored }) {
 
       {!expanded && (
         <p className="line-clamp-2 whitespace-pre-wrap break-words text-sm text-[var(--muted)]">
-          {version.content_preview}
+          <FormattedText text={version.content_preview} />
           {version.content_length > version.content_preview.length ? "…" : ""}
         </p>
       )}
@@ -90,7 +91,7 @@ function VersionCard({ version, index, isCurrent, onRestored }) {
           {contentError && <p className="text-xs text-[var(--executive-error)]">{contentError}</p>}
           {fullContent !== null && (
             <pre className="brand-input max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded-lg px-3 py-2 font-mono text-xs leading-relaxed">
-              {fullContent}
+              <FormattedText text={fullContent} />
             </pre>
           )}
 
