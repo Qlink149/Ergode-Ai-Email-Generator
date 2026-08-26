@@ -1,4 +1,5 @@
 import { AlertCircle, Inbox, Layers } from "lucide-react";
+import Modal from "../../components/Modal.jsx";
 import { EscalationStatBarItem, EscalationRow, EscalationDetailPanel } from "./EscalationPanel.jsx";
 import { ProposalTableHeader, ProposalRow } from "./ProposalTable.jsx";
 import ProposalDetailPanel from "./ProposalDetailPanel.jsx";
@@ -91,46 +92,55 @@ export default function EscalationSection({
             ))}
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
-            <div className="executive-card overflow-hidden p-0">
-              {escalationFilter !== "prompt_fix" && totalCount > fetchedCount && (
-                <p className="border-b border-[rgb(var(--navy-rgb)/0.06)] px-3 py-2 text-[11px] text-[var(--muted)]">
-                  Showing the {fetchedCount} most recent of {totalCount}. Narrow with a filter to find an older one.
-                </p>
-              )}
-              {escalationFilter === "prompt_fix" ? (
-                proposalsByRecency.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 p-8 text-center text-sm text-[var(--muted)]">
-                    <Inbox size={22} />
-                    No prompt fix proposals yet.
-                  </div>
-                ) : (
-                  <>
-                    <ProposalTableHeader />
-                    {proposalsByRecency.map((p) => (
-                      <ProposalRow key={p._id} proposal={p} selected={p._id === selectedId} onSelect={setSelectedId} />
-                    ))}
-                  </>
-                )
-              ) : filteredEscalations.length === 0 ? (
+          <div className="executive-card overflow-hidden p-0">
+            {escalationFilter !== "prompt_fix" && totalCount > fetchedCount && (
+              <p className="border-b border-[rgb(var(--navy-rgb)/0.06)] px-3 py-2 text-[11px] text-[var(--muted)]">
+                Showing the {fetchedCount} most recent of {totalCount}. Narrow with a filter to find an older one.
+              </p>
+            )}
+            {escalationFilter === "prompt_fix" ? (
+              proposalsByRecency.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 p-8 text-center text-sm text-[var(--muted)]">
                   <Inbox size={22} />
-                  Nothing matches this filter.
+                  No prompt fix proposals yet.
                 </div>
               ) : (
-                filteredEscalations.map((e) => (
-                  <EscalationRow key={e._id} escalation={e} selected={e._id === selectedEscalationId} onSelect={setSelectedEscalationId} />
-                ))
-              )}
-            </div>
-            <div className="lg:sticky lg:top-20 lg:self-start">
-              {escalationFilter === "prompt_fix" ? (
-                <ProposalDetailPanel proposal={selectedProposal} onDecided={onDecided} />
-              ) : (
-                <EscalationDetailPanel escalation={selectedEscalation} onOverrideCreated={onOverrideCreated} />
-              )}
-            </div>
+                <>
+                  <ProposalTableHeader />
+                  {proposalsByRecency.map((p) => (
+                    <ProposalRow key={p._id} proposal={p} selected={p._id === selectedId} onSelect={setSelectedId} />
+                  ))}
+                </>
+              )
+            ) : filteredEscalations.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 p-8 text-center text-sm text-[var(--muted)]">
+                <Inbox size={22} />
+                Nothing matches this filter.
+              </div>
+            ) : (
+              filteredEscalations.map((e) => (
+                <EscalationRow key={e._id} escalation={e} selected={e._id === selectedEscalationId} onSelect={setSelectedEscalationId} />
+              ))
+            )}
           </div>
+
+          {escalationFilter === "prompt_fix" ? (
+            <Modal isOpen={Boolean(selectedProposal)} onClose={() => setSelectedId(null)}>
+              {selectedProposal && (
+                <ProposalDetailPanel proposal={selectedProposal} onDecided={onDecided} onClose={() => setSelectedId(null)} />
+              )}
+            </Modal>
+          ) : (
+            <Modal isOpen={Boolean(selectedEscalation)} onClose={() => setSelectedEscalationId(null)}>
+              {selectedEscalation && (
+                <EscalationDetailPanel
+                  escalation={selectedEscalation}
+                  onOverrideCreated={onOverrideCreated}
+                  onClose={() => setSelectedEscalationId(null)}
+                />
+              )}
+            </Modal>
+          )}
         </>
       )}
     </section>

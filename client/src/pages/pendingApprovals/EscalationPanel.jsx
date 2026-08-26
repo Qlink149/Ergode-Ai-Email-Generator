@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Inbox, ChevronRight, MessageSquareWarning } from "lucide-react";
+import { ChevronRight, MessageSquareWarning, X } from "lucide-react";
 import { overrideEscalation } from "../../api.js";
 import EscalationBadge from "../../components/EscalationBadge.jsx";
 import { CaseDetail, AuthorAvatar } from "./SharedBits.jsx";
@@ -148,24 +148,26 @@ export function EscalationRow({ escalation, selected, onSelect }) {
   );
 }
 
-export function EscalationDetailPanel({ escalation, onOverrideCreated }) {
-  if (!escalation) {
-    return (
-      <div className="executive-card-soft flex h-full min-h-[240px] flex-col items-center justify-center gap-2 p-8 text-center text-sm text-[var(--muted)]">
-        <Inbox size={22} />
-        Select an item from the list to see its details.
-      </div>
-    );
-  }
-
+export function EscalationDetailPanel({ escalation, onOverrideCreated, onClose }) {
   return (
     <div className="executive-card space-y-4 p-4">
-      <div>
-        <EscalationBadge type={escalation.type} />
-        <p className="mt-1.5 text-sm leading-relaxed">{escalation.reason}</p>
-        <p className="mt-1 text-xs text-[var(--muted)]">
-          {escalation.author} · order {escalation.order_id || "—"} · {formatTimestamp(escalation.created_at)}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <EscalationBadge type={escalation.type} />
+          <p className="mt-1.5 text-sm leading-relaxed">{escalation.reason}</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">
+            {escalation.author} · order {escalation.order_id || "—"} · {formatTimestamp(escalation.created_at)}
+          </p>
+        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="shrink-0 rounded-full p-1.5 text-[var(--muted)] hover:bg-[rgb(var(--navy-rgb)/0.06)]"
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
 
       <CaseDetail record={escalation} />

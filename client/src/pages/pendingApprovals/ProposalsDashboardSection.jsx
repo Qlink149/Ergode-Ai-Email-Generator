@@ -1,4 +1,5 @@
 import { AlertCircle, Inbox, Search } from "lucide-react";
+import Modal from "../../components/Modal.jsx";
 import StatBarDecoration from "./StatBarDecoration.jsx";
 import { StatBarItem, DonutChart, ProposalTableHeader, ProposalRow } from "./ProposalTable.jsx";
 import ProposalDetailPanel from "./ProposalDetailPanel.jsx";
@@ -93,30 +94,28 @@ export default function ProposalsDashboardSection({
         </div>
       </div>
 
-      <div ref={sectionRef} className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="executive-card overflow-hidden p-0">
-          <ProposalTableHeader />
-          {totalCount > fetchedCount && (
-            <p className="border-b border-[rgb(var(--navy-rgb)/0.06)] px-3 py-2 text-[11px] text-[var(--muted)]">
-              Showing the {fetchedCount} most recent of {totalCount} proposals. Narrow with a filter or search to find an older one.
-            </p>
-          )}
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 p-8 text-center text-sm text-[var(--muted)]">
-              <Inbox size={22} />
-              No proposals match this filter.
-            </div>
-          ) : (
-            filtered.map((p) => (
-              <ProposalRow key={p._id} proposal={p} selected={p._id === selectedId} onSelect={setSelectedId} />
-            ))
-          )}
-        </div>
-
-        <div className="lg:sticky lg:top-20 lg:self-start">
-          <ProposalDetailPanel proposal={selected} onDecided={onDecided} />
-        </div>
+      <div ref={sectionRef} className="executive-card overflow-hidden p-0">
+        <ProposalTableHeader />
+        {totalCount > fetchedCount && (
+          <p className="border-b border-[rgb(var(--navy-rgb)/0.06)] px-3 py-2 text-[11px] text-[var(--muted)]">
+            Showing the {fetchedCount} most recent of {totalCount} proposals. Narrow with a filter or search to find an older one.
+          </p>
+        )}
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 p-8 text-center text-sm text-[var(--muted)]">
+            <Inbox size={22} />
+            No proposals match this filter.
+          </div>
+        ) : (
+          filtered.map((p) => (
+            <ProposalRow key={p._id} proposal={p} selected={p._id === selectedId} onSelect={setSelectedId} />
+          ))
+        )}
       </div>
+
+      <Modal isOpen={Boolean(selected)} onClose={() => setSelectedId(null)}>
+        {selected && <ProposalDetailPanel proposal={selected} onDecided={onDecided} onClose={() => setSelectedId(null)} />}
+      </Modal>
     </>
   );
 }

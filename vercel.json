@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "fluid": true,
   "builds": [
     { "src": "server/server.js", "use": "@vercel/node" },
     { "src": "pipeline/api.py", "use": "@vercel/python" }

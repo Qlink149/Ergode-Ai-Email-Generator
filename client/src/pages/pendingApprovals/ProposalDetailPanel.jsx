@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Inbox, Check, X, CheckCircle2, ArrowDown, FileSearch, Quote } from "lucide-react";
+import { Check, X, CheckCircle2, ArrowDown, FileSearch, Quote } from "lucide-react";
 import { approveProposal, rejectProposal } from "../../api.js";
 import { SectionHeading, CaseDetail } from "./SharedBits.jsx";
 import {
@@ -49,7 +49,7 @@ function ChangeFlowStep({ label, text, tint, isLast }) {
  * view (Overview / Context / Timeline) plus the Approve/Reject buttons
  * that only appear while the proposal is still pending.
  */
-export default function ProposalDetailPanel({ proposal, onDecided }) {
+export default function ProposalDetailPanel({ proposal, onDecided, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
@@ -60,15 +60,6 @@ export default function ProposalDetailPanel({ proposal, onDecided }) {
     setMessage(null);
     setTab("overview");
   }, [proposal?._id]);
-
-  if (!proposal) {
-    return (
-      <div className="executive-card-soft flex h-full min-h-[240px] flex-col items-center justify-center gap-2 p-8 text-center text-sm text-[var(--muted)]">
-        <Inbox size={22} />
-        Select a proposal from the list to see its details.
-      </div>
-    );
-  }
 
   async function handleApprove() {
     setBusy(true);
@@ -108,13 +99,24 @@ export default function ProposalDetailPanel({ proposal, onDecided }) {
 
   return (
     <div className="executive-card space-y-4 p-4">
-      <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-xs text-[var(--muted)]">{shortId(proposal._id)}</span>
-          <span className={`pill ${STATUS_PILL_CLASS[proposal.status]}`}>{STATUS_LABEL[proposal.status]}</span>
-          {proposal.trigger_type === "override" && <span className="pill pill-neutral">From an override</span>}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-mono text-xs text-[var(--muted)]">{shortId(proposal._id)}</span>
+            <span className={`pill ${STATUS_PILL_CLASS[proposal.status]}`}>{STATUS_LABEL[proposal.status]}</span>
+            {proposal.trigger_type === "override" && <span className="pill pill-neutral">From an override</span>}
+          </div>
+          <p className="mt-1.5 text-sm leading-relaxed">{proposal.reason}</p>
         </div>
-        <p className="mt-1.5 text-sm leading-relaxed">{proposal.reason}</p>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="shrink-0 rounded-full p-1.5 text-[var(--muted)] hover:bg-[rgb(var(--navy-rgb)/0.06)]"
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
 
       <div className="flex gap-1 border-b border-[rgb(var(--navy-rgb)/0.08)]">
