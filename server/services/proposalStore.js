@@ -33,7 +33,11 @@ async function getAllProposals(db, { status, page = 1, limit = DEFAULT_PAGE_SIZE
   const safeLimit = Math.max(1, Math.min(limit, 500));
 
   const [total, docs] = await Promise.all([
-    collection.countDocuments(query),
+    // estimatedDocumentCount() reads collection metadata (O(1)); a
+    // countDocuments({}) with no filter is a full collection scan and was
+    // the bulk of this endpoint's ~3s. The exact count only matters when a
+    // status filter is applied (a much smaller subset anyway).
+    status ? collection.countDocuments(query) : collection.estimatedDocumentCount(),
     collection
       .find(query)
       .sort({ created_at: -1 })

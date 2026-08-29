@@ -85,6 +85,14 @@ project; server+pipeline deploy together — see `vercel.json`, which routes
 Locally, all three run as separate processes on different ports and the client's
 Vite dev server proxies `/api` to the Express server (`client/vite.config.js`).
 
+`vercel.json` pins the server+pipeline functions to **`bom1` (Mumbai)** —
+the MongoDB Atlas cluster is in AWS `ap-south-1` (Mumbai) and the team is
+in India, so every browser→function and function→DB round trip stays
+in-region. Leaving the functions on the default US region was measured
+adding ~3s to every page load (cold start against a cross-continent DB
+connection). The client project is static/CDN-served, so its region
+doesn't matter.
+
 **Critical fact:** local dev and every deployed environment share the **exact
 same MongoDB cluster**. There is no separate dev/staging database. A system
 prompt edit or an approved proposal is instantly live everywhere the moment it's

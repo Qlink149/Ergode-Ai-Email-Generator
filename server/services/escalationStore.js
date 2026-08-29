@@ -22,7 +22,8 @@ async function getEscalations(db, { status, type, page = 1, limit = DEFAULT_PAGE
   const safeLimit = Math.max(1, Math.min(limit, 500));
 
   const [total, docs] = await Promise.all([
-    collection.countDocuments(query),
+    // O(1) metadata read when unfiltered - see proposalStore.js.
+    status || type ? collection.countDocuments(query) : collection.estimatedDocumentCount(),
     collection
       .find(query)
       .sort({ created_at: -1 })

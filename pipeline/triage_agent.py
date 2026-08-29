@@ -1,30 +1,3 @@
-"""
-triage_agent.py
-----------------
-Runs automatically whenever a support agent posts a Comment or edits a
-draft (see api.py's /triage route and edit_draft()). Reads the feedback
-plus the case it was left on, against the CURRENT live system prompt, and
-decides one of four outcomes:
-
-- "none"              - no gap the AI could find; still recorded for a
-                          human to see and dismiss, just never auto-applied
-- "prompt_fix"         - a system-prompt rule is missing or wrong; drafts an
-                          exact-anchor insertion/replacement (never a full
-                          document rewrite - see the anchor_text field
-                          below), held as a pending proposal (see
-                          prompt_proposal_store.py) until a human approves
-                          it - never auto-applied
-- "code_restriction"   - can only be fixed by an actual code change
-- "data_restriction"   - needs data from the CRM/Order API that never
-                          reaches the AI today
-
-Every outcome is recorded somewhere a human can see it - "prompt_fix" as a
-proposal (prompt_proposal_store.py), the other three as an escalation
-(escalation_store.py) - so nothing the AI decides is ever invisible. Only
-a prompt_fix proposal has an action to take (approve/reject); the rest
-are acknowledged, not applied.
-"""
-
 import json
 from typing import Optional
 

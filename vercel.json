@@ -1,6 +1,7 @@
 {
   "version": 2,
   "fluid": true,
+  "regions": ["bom1"],
   "builds": [
     { "src": "server/server.js", "use": "@vercel/node" },
     { "src": "pipeline/api.py", "use": "@vercel/python" }

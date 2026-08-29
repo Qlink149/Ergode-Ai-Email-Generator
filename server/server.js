@@ -53,8 +53,29 @@ if (process.env.VERCEL && allowedOrigins.length === 0) {
   );
 }
 
-app.use(cors({ origin: allowedOrigins.length > 0 ? allowedOrigins : "*" }));
+// maxAge: the client and API are separate origins (separate Vercel
+// projects), so the browser fires a CORS preflight (OPTIONS) before every
+// GET/PUT/POST that carries the Authorization header - each one a full
+// round trip that showed up as ~300ms per request in the network tab.
+// Caching the preflight means one OPTIONS per endpoint per browser
+// session (Chrome caps the cache at 2h) instead of one before every call.
+app.use(cors({ origin: allowedOrigins.length > 0 ? allowedOrigins : "*", maxAge: 86400 }));
 app.use(express.json());
+
+// Request timing. One line per request in the function log stream
+// (`vercel logs <deployment>` or the dashboard) - method, path, status,
+// server-side duration. This is the time spent IN the handler only; it
+// does not include cold start or network, so a fast number here next to a
+// slow number in the browser's network tab points straight at
+// infrastructure (cold start / region distance) rather than the code.
+app.use((req, res, next) => {
+  const startedAt = process.hrtime.bigint();
+  res.on("finish", () => {
+    const ms = Number(process.hrtime.bigint() - startedAt) / 1e6;
+    console.log(`[timing] ${req.method} ${req.originalUrl} ${res.statusCode} ${ms.toFixed(0)}ms`);
+  });
+  next();
+});
 
 // Public: logging in, and the health check other services poll.
 app.use("/api/auth", authRouter);
