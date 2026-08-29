@@ -10,6 +10,7 @@
 const express = require("express");
 const { getDb } = require("../db");
 const { computeToken } = require("../services/authToken");
+const { requirePerm } = require("../services/permissions");
 const { getAllProposals, getProposalStats } = require("../services/proposalStore");
 
 const router = express.Router();
@@ -52,7 +53,7 @@ router.get("/stats", async (req, res) => {
   }
 });
 
-router.post("/:id/approve", async (req, res) => {
+router.post("/:id/approve", requirePerm("approveProposals"), async (req, res) => {
   try {
     const response = await fetch(`${PIPELINE_URL}/proposals/${req.params.id}/approve`, {
       method: "POST",
@@ -68,7 +69,7 @@ router.post("/:id/approve", async (req, res) => {
   }
 });
 
-router.post("/:id/reject", async (req, res) => {
+router.post("/:id/reject", requirePerm("approveProposals"), async (req, res) => {
   try {
     const response = await fetch(`${PIPELINE_URL}/proposals/${req.params.id}/reject`, {
       method: "POST",

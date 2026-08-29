@@ -7,6 +7,7 @@ import {
   ShieldAlert,
   CheckCircle2,
   Pencil,
+  Edit3,
   ShieldCheck,
   ShieldX,
   Shield,
@@ -112,6 +113,13 @@ export const ESCALATION_TYPES = ["code_restriction", "data_restriction", "none"]
 // dashboard above) - shown here too so this bar reads as the complete
 // breakdown across all four triage outcomes, not just the non-prompt-fix ones.
 export const PROMPT_FIX_STAT_META = { icon: Pencil, bg: "rgb(var(--violet-rgb)/0.14)", color: "var(--violet)" };
+// "Permanent Edit" stat card - how many proposals+escalations were
+// triggered by a draft edit explicitly flagged as a permanent fix (see
+// EditableDraft.jsx's checkbox), as opposed to a Comment. Informational,
+// not a filter - a permanent-fix edit can land as any outcome (prompt fix,
+// code/data restriction, or no gap), spanning both collections, so it
+// doesn't map onto the single-collection filter model the other cards use.
+export const PERMANENT_EDIT_STAT_META = { icon: Edit3, bg: "rgb(var(--lavender-rgb)/0.14)", color: "var(--lavender)" };
 
 export const DETAIL_TABS = [
   { id: "overview", label: "Overview" },

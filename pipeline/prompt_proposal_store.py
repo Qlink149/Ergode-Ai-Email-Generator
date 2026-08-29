@@ -18,12 +18,17 @@ and testing directly caught it silently dropping an unrelated existing
 line while doing that - reproducing a large document verbatim isn't
 something a model can be trusted to do 100% reliably, even when told to
 preserve everything. Applying the fix as a literal, deterministic
-find-and-splice in code (apply_edit(), below) removes that risk entirely:
-either the anchor text is found and the edit is exact, or it isn't and
-nothing is touched.
+find-and-splice in code (prompt_apply.py's apply_edit()) removes that
+risk entirely: either the anchor text is found and the edit is exact, or
+it isn't and nothing is touched.
+
+get_proposal_stats() lives in proposal_stats.py, and apply_edit() in
+prompt_apply.py - both re-exported here (split out purely for length; the
+import below still makes `from prompt_proposal_store import
+get_proposal_stats` work for every existing caller).
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 from bson import ObjectId
@@ -31,37 +36,14 @@ from pymongo.errors import PyMongoError
 
 from db import get_db
 from system_prompt_store import save_system_prompt, load_system_prompt
+from prompt_apply import apply_edit
+from proposal_stats import get_proposal_stats  # noqa: F401 (re-exported for existing callers)
 
 
 def _serialize(doc: dict) -> dict:
     doc = dict(doc)
     doc["_id"] = str(doc["_id"])
     return doc
-
-
-def apply_edit(current_prompt: str, edit_type: str, anchor_text: str, new_text: str):
-    """
-    Deterministic, code-only splice - no model involved in this step at
-    all. Returns (success: bool, content_or_none: Optional[str], note: str).
-    Refuses (success=False) unless anchor_text appears in current_prompt
-    exactly once, so there's never any ambiguity about where the edit goes
-    and never any risk of the rest of the document being altered.
-    """
-    if not anchor_text or not new_text or edit_type not in ("insert_after", "replace"):
-        return False, None, "Malformed edit (missing anchor/new text, or unknown edit_type)."
-
-    count = current_prompt.count(anchor_text)
-    if count == 0:
-        return False, None, "The anchor text no longer appears in the current live prompt - it may have changed."
-    if count > 1:
-        return False, None, f"The anchor text appears {count} times in the current prompt - too ambiguous to apply safely."
-
-    if edit_type == "insert_after":
-        merged = current_prompt.replace(anchor_text, f"{anchor_text}\n{new_text}", 1)
-    else:
-        merged = current_prompt.replace(anchor_text, new_text, 1)
-
-    return True, merged, "Applied cleanly."
 
 
 def save_prompt_proposal(context: dict, result: dict) -> Optional[str]:
@@ -140,75 +122,11 @@ def get_all_proposals(status: Optional[str] = None, page: int = 1, limit: int = 
     return [_serialize(d) for d in docs], total
 
 
-# Every bucket the UI groups a status into - see PendingApprovalsPage's
-# bucketOf() on the frontend, mirrored here so the aggregation below
-# produces the exact same 4 buckets without the frontend ever downloading
-# a raw status list to bucket itself.
-_BUCKET_EXPR = {
-    "$switch": {
-        "branches": [
-            {"case": {"$eq": ["$status", "pending"]}, "then": "pending"},
-            {"case": {"$eq": ["$status", "approved"]}, "then": "implemented"},
-            {"case": {"$eq": ["$status", "rejected"]}, "then": "rejected"},
-        ],
-        "default": "needs_attention",  # already_covered, needs_manual_review
-    }
-}
-
-
-def get_proposal_stats() -> dict:
-    """
-    The counts PendingApprovalsPage's stat cards/donut/filter-tabs need,
-    computed by MongoDB instead of downloaded-then-reduced in the browser
-    (see the analytics-architecture section of the Vercel/MongoDB audit).
-    Returns the same shape the old client-side useMemo produced, plus
-    non_override_total (every proposal NOT created by a human override -
-    the frontend needs this one extra number to compute "Total Triaged"
-    without double-counting an overridden escalation's own proposal record).
-    """
-    collection = get_db()["prompt_proposals"]
-    week_cutoff = datetime.now(timezone.utc) - timedelta(days=7)
-
-    pipeline = [
-        {
-            "$facet": {
-                "all_time": [
-                    {"$group": {"_id": _BUCKET_EXPR, "count": {"$sum": 1}}},
-                ],
-                "this_week": [
-                    {"$match": {"created_at": {"$gte": week_cutoff}}},
-                    {"$group": {"_id": _BUCKET_EXPR, "count": {"$sum": 1}}},
-                ],
-                "non_override_total": [
-                    {"$match": {"trigger_type": {"$ne": "override"}}},
-                    {"$count": "count"},
-                ],
-            }
-        }
-    ]
-    result = list(collection.aggregate(pipeline))[0]
-
-    counts = {"pending": 0, "implemented": 0, "rejected": 0, "needs_attention": 0}
-    week_counts = {"pending": 0, "implemented": 0, "rejected": 0, "needs_attention": 0}
-    for row in result["all_time"]:
-        counts[row["_id"]] = row["count"]
-    for row in result["this_week"]:
-        week_counts[row["_id"]] = row["count"]
-    non_override_total = result["non_override_total"][0]["count"] if result["non_override_total"] else 0
-
-    return {
-        "counts": counts,
-        "weekCounts": week_counts,
-        "total": sum(counts.values()),
-        "non_override_total": non_override_total,
-    }
-
-
 def create_proposal_from_override(escalation: dict, override_note: str, author: str) -> Optional[str]:
     """
-    A human disagreed with a triage verdict (see api.py's POST
-    /escalations/{id}/override) and wants a real fix drafted anyway. Runs
-    the same anchor-based drafting logic (triage_agent.py's
+    A human disagreed with a triage verdict (see routers/escalations.py's
+    POST /escalations/{id}/override) and wants a real fix drafted anyway.
+    Runs the same anchor-based drafting logic (triage_agent.py's
     draft_fix_from_override()) against the current live prompt, then
     stores it as a normal pending proposal - it still needs a separate
     Approve click, same as any other proposal, the override doesn't apply
@@ -250,8 +168,8 @@ def approve_proposal(proposal_id: str) -> Optional[dict]:
     meantime), so this first re-checks the fix against whatever the live
     prompt actually looks like right now (see triage_agent.py's
     recheck_and_merge_proposal()), then applies it with a deterministic,
-    code-only splice (apply_edit()) rather than trusting model-generated
-    full-document text.
+    code-only splice (prompt_apply.py's apply_edit()) rather than trusting
+    model-generated full-document text.
     """
     collection = get_db()["prompt_proposals"]
     doc = collection.find_one({"_id": ObjectId(proposal_id), "status": "pending"})

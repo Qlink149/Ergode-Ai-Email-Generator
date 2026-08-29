@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, X, CheckCircle2, ArrowDown, FileSearch, Quote } from "lucide-react";
 import { approveProposal, rejectProposal } from "../../api.js";
+import { useAuth, can } from "../../auth.js";
 import FormattedText from "../../components/FormattedText.jsx";
 import { SectionHeading, CaseDetail } from "./SharedBits.jsx";
 import {
@@ -53,6 +54,8 @@ function ChangeFlowStep({ label, text, tint, isLast }) {
  * that only appear while the proposal is still pending.
  */
 export default function ProposalDetailPanel({ proposal, onDecided, onClose }) {
+  const { me } = useAuth();
+  const canDecide = can(me, "approveProposals");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [message, setMessage] = useState(null);
@@ -238,7 +241,7 @@ export default function ProposalDetailPanel({ proposal, onDecided, onClose }) {
         </div>
       )}
 
-      {proposal.status === "pending" && (
+      {proposal.status === "pending" && canDecide && (
         <div className="flex items-center gap-2 border-t border-[rgb(var(--navy-rgb)/0.08)] pt-3">
           <button
             onClick={handleApprove}
@@ -257,6 +260,11 @@ export default function ProposalDetailPanel({ proposal, onDecided, onClose }) {
             Reject
           </button>
         </div>
+      )}
+      {proposal.status === "pending" && !canDecide && (
+        <p className="border-t border-[rgb(var(--navy-rgb)/0.08)] pt-3 text-xs text-[var(--muted)]">
+          Awaiting approval - you don't have permission to approve or reject proposals.
+        </p>
       )}
 
       {message && (

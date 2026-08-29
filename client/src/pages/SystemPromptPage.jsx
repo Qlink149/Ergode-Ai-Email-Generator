@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Save, CheckCircle2, FileText, AlertCircle, History } from "lucide-react";
+import { Save, CheckCircle2, FileText, AlertCircle, History, Lock } from "lucide-react";
 import { fetchSystemPrompt, saveSystemPrompt } from "../api.js";
 import PromptVersionHistory from "../components/PromptVersionHistory.jsx";
+import { useAuth, can } from "../auth.js";
 
 /**
  * SystemPromptPage.jsx
@@ -15,6 +16,8 @@ import PromptVersionHistory from "../components/PromptVersionHistory.jsx";
  */
 
 export default function SystemPromptPage() {
+  const { me } = useAuth();
+  const canEdit = can(me, "editSystemPrompt");
   const [content, setContent] = useState("");
   const [savedContent, setSavedContent] = useState("");
   const [loading, setLoading] = useState(true);
@@ -117,19 +120,27 @@ export default function SystemPromptPage() {
               rows={28}
               value={content}
               onChange={(e) => setContent(e.target.value)}
+              readOnly={!canEdit}
               spellCheck={false}
             />
           </div>
 
           <div className="flex items-center gap-3 px-5 py-4">
-            <button
-              onClick={handleSave}
-              disabled={saving || !isDirty}
-              className="brand-button px-5 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Save size={16} />
-              {saving ? "Saving..." : "Save changes"}
-            </button>
+            {canEdit ? (
+              <button
+                onClick={handleSave}
+                disabled={saving || !isDirty}
+                className="brand-button px-5 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Save size={16} />
+                {saving ? "Saving..." : "Save changes"}
+              </button>
+            ) : (
+              <span className="flex items-center gap-1.5 text-sm text-[var(--muted)]">
+                <Lock size={14} />
+                Read-only - you don't have permission to edit the system prompt.
+              </span>
+            )}
 
             {justSaved && (
               <span className="flex items-center gap-1.5 text-sm text-[var(--executive-success)]">

@@ -28,9 +28,22 @@ function getClient() {
   return clientPromise;
 }
 
+let indexesReady = false;
+
 async function getDb() {
   const client = await getClient();
-  return client.db(process.env.MONGODB_DB_NAME || "ergode");
+  const db = client.db(process.env.MONGODB_DB_NAME || "ergode");
+  if (!indexesReady) {
+    indexesReady = true;
+    // Correctness, not just speed: two accounts must never share an email.
+    // createIndex is idempotent; a transient failure just retries next cold start.
+    db.collection("users")
+      .createIndex({ email: 1 }, { unique: true })
+      .catch(() => {
+        indexesReady = false;
+      });
+  }
+  return db;
 }
 
 module.exports = { getDb };

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Pencil, Check, MessageSquarePlus } from "lucide-react";
 import { saveDraftEdit, postComment } from "../api.js";
+import { useAuth, can } from "../auth.js";
 
 // The system prompt's MANDATORY OUTPUT FORMAT rule (draft_generator.py) makes
 // the model return "<reply>\n=====\n<same reply in English>" whenever the
@@ -29,16 +30,28 @@ function splitBilingualDraft(text) {
  * comment later sees exactly what the customer said, what the AI replied,
  * and why - without having to regenerate the draft or re-look-up the order.
  *
+ * Neither form asks who's doing this - that's already known from the login
+ * (useAuth()'s `me.name`, or "Admin" for the shared login), so it's sent
+ * straight through as the author on both an edit and a comment.
+ *
  * Used by OrderLookupPage.jsx.
  */
 export default function EditableDraft({ orderId, threadId, seq, draftReply, customerMessage, aiContext }) {
+  const { me } = useAuth();
+  const canFlagPermanentFix = can(me, "flagPermanentFix");
+  // Logging in already says who this is - a named user's own name, or
+  // "Admin" for the shared login. No separate "type your name" prompt
+  // needed anywhere in this component anymore.
+  const myName = me?.name || me?.email || "unknown";
+
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(draftReply);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [permanentFix, setPermanentFix] = useState(false);
+  const [sentForReview, setSentForReview] = useState(false);
 
   const [commenting, setCommenting] = useState(false);
-  const [commentAuthor, setCommentAuthor] = useState("");
   const [commentText, setCommentText] = useState("");
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [commentPosted, setCommentPosted] = useState(false);
@@ -48,17 +61,28 @@ export default function EditableDraft({ orderId, threadId, seq, draftReply, cust
     setText(draftReply);
     setEditing(false);
     setSaved(false);
+    setPermanentFix(false);
+    setSentForReview(false);
     setCommenting(false);
     setCommentText("");
     setCommentPosted(false);
     setCommentError(null);
   }, [threadId, seq, draftReply]);
 
+  const wantsReview = canFlagPermanentFix && permanentFix;
+
   async function handleSave() {
     setSaving(true);
     try {
-      await saveDraftEdit({ threadId, seq, editedReply: text });
+      const result = await saveDraftEdit({
+        threadId,
+        seq,
+        editedReply: text,
+        permanentFix: wantsReview,
+        author: myName,
+      });
       setSaved(true);
+      setSentForReview(Boolean(result.permanent_fix_applied));
       setEditing(false);
     } catch {
       // Best-effort - the edited text stays visible either way.
@@ -69,14 +93,14 @@ export default function EditableDraft({ orderId, threadId, seq, draftReply, cust
 
   async function handlePostComment(e) {
     e.preventDefault();
-    if (!commentAuthor.trim() || !commentText.trim()) return;
+    if (!commentText.trim()) return;
     setCommentSubmitting(true);
     setCommentError(null);
     try {
       const { reply } = splitBilingualDraft(text);
       await postComment({
         orderId,
-        author: commentAuthor.trim(),
+        author: myName,
         text: commentText.trim(),
         seq,
         customerMessage,
@@ -96,7 +120,7 @@ export default function EditableDraft({ orderId, threadId, seq, draftReply, cust
     <div className="executive-card p-5">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">
-          What our AI generated{saved && " (edited)"}
+          What our AI generated{saved && (sentForReview ? " (edited · sent for review)" : " (edited)")}
         </h3>
         {!editing && !commenting && (
           <div className="flex gap-2">
@@ -132,13 +156,27 @@ export default function EditableDraft({ orderId, threadId, seq, draftReply, cust
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
+          {canFlagPermanentFix && (
+            <label className="flex items-start gap-2 rounded-lg border border-[rgb(var(--violet-rgb)/0.2)] bg-[rgb(var(--violet-rgb)/0.04)] p-2.5 text-xs leading-relaxed">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={permanentFix}
+                onChange={(e) => setPermanentFix(e.target.checked)}
+              />
+              <span>
+                <span className="font-semibold">This is a permanent fix.</span> Send it for review so it can
+                improve future AI replies. Leave unchecked to just save this one reply.
+              </span>
+            </label>
+          )}
           <button
             onClick={handleSave}
             disabled={saving}
             className="brand-button px-4 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Check size={13} />
-            {saving ? "Saving..." : "Save edit"}
+            {saving ? "Saving..." : wantsReview ? "Save & send for review" : "Save edit"}
           </button>
         </div>
       ) : (
@@ -162,12 +200,6 @@ export default function EditableDraft({ orderId, threadId, seq, draftReply, cust
 
       {commenting && (
         <form onSubmit={handlePostComment} className="mt-4 space-y-2 border-t border-[rgb(var(--navy-rgb)/0.08)] pt-4">
-          <input
-            className="brand-input w-full rounded-lg px-3 py-2 text-sm"
-            value={commentAuthor}
-            onChange={(e) => setCommentAuthor(e.target.value)}
-            placeholder="Your name"
-          />
           <textarea
             className="brand-input w-full rounded-lg px-3 py-2 text-sm"
             rows={2}
@@ -178,7 +210,7 @@ export default function EditableDraft({ orderId, threadId, seq, draftReply, cust
           <div className="flex items-center gap-2">
             <button
               type="submit"
-              disabled={commentSubmitting || !commentAuthor.trim() || !commentText.trim()}
+              disabled={commentSubmitting || !commentText.trim()}
               className="brand-button px-4 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
             >
               <MessageSquarePlus size={13} />

@@ -11,6 +11,7 @@ const express = require("express");
 const { ObjectId } = require("mongodb");
 const { getDb } = require("../db");
 const { computeToken } = require("../services/authToken");
+const { requirePerm } = require("../services/permissions");
 const { getEscalations, getEscalationStats } = require("../services/escalationStore");
 
 const router = express.Router();
@@ -21,7 +22,13 @@ router.get("/", async (req, res) => {
     const db = await getDb();
     const page = req.query.page ? parseInt(req.query.page, 10) : 1;
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : 200;
-    const data = await getEscalations(db, { status: req.query.status, type: req.query.type, page, limit });
+    const data = await getEscalations(db, {
+      status: req.query.status,
+      type: req.query.type,
+      triggerType: req.query.trigger_type,
+      page,
+      limit,
+    });
     res.json({ ...data, page, limit });
   } catch (err) {
     res.status(502).json({ error: `Could not load escalations: ${err.message}` });
@@ -55,7 +62,7 @@ router.post("/seen", async (req, res) => {
   }
 });
 
-router.post("/:id/override", async (req, res) => {
+router.post("/:id/override", requirePerm("approveProposals"), async (req, res) => {
   try {
     const response = await fetch(`${PIPELINE_URL}/escalations/${req.params.id}/override`, {
       method: "POST",

@@ -20,6 +20,7 @@
 const express = require("express");
 const { getDb } = require("../db");
 const { computeToken } = require("../services/authToken");
+const { requirePerm } = require("../services/permissions");
 const {
   loadSystemPrompt,
   listSystemPromptVersions,
@@ -71,7 +72,7 @@ router.get("/versions/:id", async (req, res) => {
   }
 });
 
-router.put("/", async (req, res) => {
+router.put("/", requirePerm("editSystemPrompt"), async (req, res) => {
   try {
     const content = req.body?.content;
     if (typeof content !== "string") {

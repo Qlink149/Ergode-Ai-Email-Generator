@@ -30,7 +30,10 @@ const proposalsRouter = require("./routes/proposals");
 const escalationsRouter = require("./routes/escalations");
 const notificationsRouter = require("./routes/notifications");
 const authRouter = require("./routes/auth");
-const { verifyToken } = require("./services/authToken");
+const accountRouter = require("./routes/account");
+const usersRouter = require("./routes/users");
+const { verifyToken, verifyUserToken } = require("./services/authToken");
+const { ALL_PERMISSIONS, requirePerm } = require("./services/permissions");
 
 const app = express();
 const port = process.env.SERVER_PORT || 4000;
@@ -83,15 +86,35 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-// Everything else under /api requires the shared-password token from /api/auth/login.
+// Everything else under /api requires a token from /api/auth/login and
+// attaches req.user. Two kinds are accepted:
+//  - the shared-password token  -> req.user is the "admin" (every permission)
+//  - a signed per-user JWT       -> req.user carries that user's permissions
 app.use("/api", (req, res, next) => {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-  if (!verifyToken(token)) {
-    return res.status(401).json({ error: "Unauthorized" });
+  if (!token) return res.status(401).json({ error: "Unauthorized" });
+
+  if (verifyToken(token)) {
+    req.user = { kind: "admin", name: "Admin", perms: ALL_PERMISSIONS };
+    return next();
   }
-  next();
+  const payload = verifyUserToken(token);
+  if (payload) {
+    req.user = {
+      kind: "user",
+      id: payload.sub,
+      email: payload.email,
+      name: payload.name,
+      perms: payload.perms || {},
+    };
+    return next();
+  }
+  return res.status(401).json({ error: "Unauthorized" });
 });
+
+app.use("/api/account", accountRouter);
+app.use("/api/users", requirePerm("manageUsers"), usersRouter);
 
 app.use("/api/generate", generateRouter);
 app.use("/api/system-prompt", systemPromptRouter);

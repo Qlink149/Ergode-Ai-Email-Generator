@@ -1,23 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import { ListChecks, RefreshCw } from "lucide-react";
-import {
-  fetchProposalHistory,
-  fetchProposalStats,
-  fetchEscalations,
-  fetchEscalationStats,
-  markEscalationsSeen,
-} from "../api.js";
-import { bucketOf, ESCALATION_TYPES } from "./pendingApprovals/constants.js";
+import { usePendingApprovalsData } from "./pendingApprovals/usePendingApprovalsData.js";
 import ProposalsDashboardSection from "./pendingApprovals/ProposalsDashboardSection.jsx";
 import EscalationSection from "./pendingApprovals/EscalationSection.jsx";
-
-const EMPTY_PROPOSAL_STATS = {
-  counts: { pending: 0, implemented: 0, rejected: 0, needs_attention: 0 },
-  weekCounts: { pending: 0, implemented: 0, rejected: 0, needs_attention: 0 },
-  total: 0,
-  non_override_total: 0,
-};
-const EMPTY_ESCALATION_STATS = { counts: { code_restriction: 0, data_restriction: 0, none: 0 }, total: 0 };
 
 /**
  * PendingApprovalsPage.jsx
@@ -39,148 +23,13 @@ const EMPTY_ESCALATION_STATS = { counts: { code_restriction: 0, data_restriction
  * Stat cards, the donut, and every filter-tab count come from two small
  * MongoDB-aggregated endpoints (fetchProposalStats/fetchEscalationStats),
  * NOT from reducing the full proposals/escalations arrays in the browser -
- * see the Vercel/MongoDB performance audit this replaced. The row lists
- * still fetch actual records (paginated, 200 at a time - see
- * fetchProposalHistory/fetchEscalations) since the table needs real rows
- * to render, but nothing here downloads "every record that has ever
- * existed" just to count them anymore.
+ * see the Vercel/MongoDB performance audit this replaced.
  *
- * This file only owns state, data loading, and the derived (useMemo)
- * values both sections need - all the actual markup lives in the section
- * components and their own sub-components under ./pendingApprovals/.
+ * This file is pure JSX composition - every bit of state, data loading,
+ * polling, and derived value lives in ./pendingApprovals/usePendingApprovalsData.js.
  */
 export default function PendingApprovalsPage() {
-  const [proposals, setProposals] = useState([]);
-  const [proposalsTotal, setProposalsTotal] = useState(0);
-  const [proposalStats, setProposalStats] = useState(EMPTY_PROPOSAL_STATS);
-  const [proposalsLoading, setProposalsLoading] = useState(true);
-  const [proposalsError, setProposalsError] = useState(null);
-  const [selectedId, setSelectedId] = useState(null);
-  const [filterBucket, setFilterBucket] = useState("all");
-  const [search, setSearch] = useState("");
-
-  const proposalsSectionRef = useRef(null);
-
-  const [escalations, setEscalations] = useState([]);
-  const [escalationsTotal, setEscalationsTotal] = useState(0);
-  const [escalationStats, setEscalationStats] = useState(EMPTY_ESCALATION_STATS);
-  const [escalationsLoading, setEscalationsLoading] = useState(true);
-  const [escalationsError, setEscalationsError] = useState(null);
-  const [selectedEscalationId, setSelectedEscalationId] = useState(null);
-  const [escalationFilter, setEscalationFilter] = useState("all");
-  const [escalationPage, setEscalationPage] = useState(1);
-  const [escalationLimit, setEscalationLimit] = useState(10);
-
-  function loadProposals() {
-    setProposalsLoading(true);
-    Promise.all([fetchProposalHistory(), fetchProposalStats()])
-      .then(([history, stats]) => {
-        setProposals(history.proposals);
-        setProposalsTotal(history.total);
-        setProposalStats(stats);
-      })
-      .catch((err) => setProposalsError(err.message))
-      .finally(() => setProposalsLoading(false));
-  }
-
-  // escalationFilter can be "all", "prompt_fix" (handled entirely
-  // client-side from the proposals list - see proposalsByRecency below,
-  // not a real escalation field), or one of ESCALATION_TYPES - only the
-  // latter gets sent to the server as an actual `type` filter, so
-  // pagination stays accurate for whichever tab is active.
-  function loadEscalations() {
-    setEscalationsLoading(true);
-    const type = ESCALATION_TYPES.includes(escalationFilter) ? escalationFilter : undefined;
-    Promise.all([
-      fetchEscalations(undefined, { page: escalationPage, limit: escalationLimit, type }),
-      fetchEscalationStats(),
-    ])
-      .then(([list, stats]) => {
-        setEscalations(list.escalations);
-        setEscalationsTotal(list.total);
-        setEscalationStats(stats);
-        const unseenIds = list.escalations.filter((e) => e.status === "unseen").map((e) => e._id);
-        if (unseenIds.length > 0) markEscalationsSeen(unseenIds).catch(() => {});
-      })
-      .catch((err) => setEscalationsError(err.message))
-      .finally(() => setEscalationsLoading(false));
-  }
-
-  useEffect(() => {
-    loadProposals();
-  }, []);
-
-  // Re-fetches whenever the filter tab, page, or rows-per-page changes -
-  // also covers the initial load, since this effect fires on mount too.
-  useEffect(() => {
-    loadEscalations();
-  }, [escalationFilter, escalationPage, escalationLimit]);
-
-  function handleEscalationFilterChange(nextFilter) {
-    setEscalationFilter(nextFilter);
-    setEscalationPage(1); // changing filters invalidates whatever page you were on
-  }
-
-  function handleEscalationLimitChange(nextLimit) {
-    setEscalationLimit(nextLimit);
-    setEscalationPage(1);
-  }
-
-  // Filters/searches within the page of proposals actually fetched (up to
-  // 200 - see fetchProposalHistory) rather than a full unbounded history.
-  // The COUNTS shown on filter tabs come from proposalStats (a real
-  // database aggregate), not from this array's length, so the tab labels
-  // stay accurate even once total proposals exceed one page.
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return proposals
-      .filter((p) => filterBucket === "all" || bucketOf(p.status) === filterBucket)
-      .filter(
-        (p) =>
-          !q ||
-          (p.reason || "").toLowerCase().includes(q) ||
-          (p.order_id || "").toLowerCase().includes(q) ||
-          (p.author || "").toLowerCase().includes(q)
-      )
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  }, [proposals, filterBucket, search]);
-
-  const selected = proposals.find((p) => p._id === selectedId) || null;
-  const selectedEscalation = escalations.find((e) => e._id === selectedEscalationId) || null;
-
-  // A proposal created from an override doesn't represent a NEW piece of
-  // feedback - it's a second record for the SAME feedback that already has
-  // an escalation entry. Naively adding escalations + proposals double-
-  // counts every overridden item (once as its still-there "none"/code/data
-  // escalation, once as the proposal the override created). Grand total =
-  // every escalation, once each, plus only the proposals that came from an
-  // original comment/edit (proposalStats.non_override_total, computed by
-  // the same MongoDB aggregation as everything else in proposalStats).
-  const totalTriaged = escalationStats.total + proposalStats.non_override_total;
-
-  // "Prompt Fix" isn't an escalation type - those items are proposals. When
-  // that filter is active, this section shows the actual proposal rows
-  // (newest first) right here instead of trying to filter the escalation
-  // list to something that can never match.
-  const proposalsByRecency = useMemo(
-    () => [...proposals].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
-    [proposals]
-  );
-
-  // For EscalationTable's STATUS column - an overridden escalation's real
-  // status is its resulting proposal's status (pending/approved/rejected),
-  // looked up by id rather than fetched again, since the proposals list is
-  // already in memory here.
-  const proposalsById = useMemo(() => new Map(proposals.map((p) => [p._id, p])), [proposals]);
-
-  function handleDecided() {
-    loadProposals();
-  }
-
-  function handleOverrideCreated() {
-    loadProposals();
-    loadEscalations();
-  }
+  const data = usePendingApprovalsData();
 
   return (
     <div className="space-y-6">
@@ -199,8 +48,8 @@ export default function PendingApprovalsPage() {
         </div>
         <button
           onClick={() => {
-            loadProposals();
-            loadEscalations();
+            data.loadProposals();
+            data.loadEscalations();
           }}
           className="brand-button-ghost px-3 py-1.5 text-xs"
         >
@@ -210,48 +59,51 @@ export default function PendingApprovalsPage() {
       </div>
 
       <ProposalsDashboardSection
-        loading={proposalsLoading}
-        error={proposalsError}
-        stats={proposalStats}
-        fetchedCount={proposals.length}
-        totalCount={proposalsTotal}
-        filterBucket={filterBucket}
-        setFilterBucket={setFilterBucket}
-        search={search}
-        setSearch={setSearch}
-        filtered={filtered}
-        selectedId={selectedId}
-        setSelectedId={setSelectedId}
-        selected={selected}
-        onDecided={handleDecided}
-        sectionRef={proposalsSectionRef}
+        loading={data.proposalsLoading}
+        error={data.proposalsError}
+        stats={data.proposalStats}
+        fetchedCount={data.proposals.length}
+        totalCount={data.proposalsTotal}
+        filterBucket={data.filterBucket}
+        setFilterBucket={data.setFilterBucket}
+        search={data.search}
+        setSearch={data.setSearch}
+        filtered={data.filtered}
+        selectedId={data.selectedId}
+        setSelectedId={data.setSelectedId}
+        selected={data.selected}
+        onDecided={data.handleDecided}
+        sectionRef={data.proposalsSectionRef}
       />
 
       <EscalationSection
-        loading={escalationsLoading}
-        error={escalationsError}
-        escalations={escalations}
-        totalCount={escalationsTotal}
-        totalTriaged={totalTriaged}
-        promptFixValue={proposalStats.total}
-        escalationStats={escalationStats}
-        escalationFilter={escalationFilter}
-        setEscalationFilter={handleEscalationFilterChange}
-        filteredEscalations={escalations}
-        proposalsByRecency={proposalsByRecency}
-        proposalsById={proposalsById}
-        selectedId={selectedId}
-        setSelectedId={setSelectedId}
-        selectedProposal={selected}
-        selectedEscalationId={selectedEscalationId}
-        setSelectedEscalationId={setSelectedEscalationId}
-        selectedEscalation={selectedEscalation}
-        onDecided={handleDecided}
-        onOverrideCreated={handleOverrideCreated}
-        page={escalationPage}
-        limit={escalationLimit}
-        onPageChange={setEscalationPage}
-        onLimitChange={handleEscalationLimitChange}
+        loading={data.escalationsLoading}
+        error={data.escalationsError}
+        escalations={data.escalations}
+        totalCount={data.escalationsTotal}
+        totalTriaged={data.totalTriaged}
+        permanentEditTotal={data.permanentEditTotal}
+        permanentEditBreakdown={data.permanentEditBreakdown}
+        promptFixValue={data.proposalStats.total}
+        escalationStats={data.escalationStats}
+        escalationFilter={data.escalationFilter}
+        setEscalationFilter={data.handleEscalationFilterChange}
+        filteredEscalations={data.escalations}
+        proposalsByRecency={data.proposalsByRecency}
+        permanentFixProposals={data.permanentFixProposals}
+        proposalsById={data.proposalsById}
+        selectedId={data.selectedId}
+        setSelectedId={data.setSelectedId}
+        selectedProposal={data.selected}
+        selectedEscalationId={data.selectedEscalationId}
+        setSelectedEscalationId={data.setSelectedEscalationId}
+        selectedEscalation={data.selectedEscalation}
+        onDecided={data.handleDecided}
+        onOverrideCreated={data.handleOverrideCreated}
+        page={data.escalationPage}
+        limit={data.escalationLimit}
+        onPageChange={data.setEscalationPage}
+        onLimitChange={data.handleEscalationLimitChange}
       />
     </div>
   );

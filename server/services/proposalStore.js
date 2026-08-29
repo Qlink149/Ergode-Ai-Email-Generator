@@ -77,6 +77,12 @@ async function getProposalStats(db) {
             { $group: { _id: BUCKET_EXPR, count: { $sum: 1 } } },
           ],
           non_override_total: [{ $match: { trigger_type: { $ne: "override" } } }, { $count: "count" }],
+          // "Permanent Edit" stat card on the Everything Else Reviewed
+          // section - how many of these came from a draft edit explicitly
+          // flagged as a permanent fix (see server/routes/draftEdit.js),
+          // as opposed to a Comment. Any status counts - it's a volume
+          // stat, not a queue.
+          draft_edit_total: [{ $match: { trigger_type: "draft_edit" } }, { $count: "count" }],
         },
       },
     ])
@@ -87,12 +93,14 @@ async function getProposalStats(db) {
   for (const row of result.all_time) counts[row._id] = row.count;
   for (const row of result.this_week) weekCounts[row._id] = row.count;
   const nonOverrideTotal = result.non_override_total[0]?.count || 0;
+  const draftEditTotal = result.draft_edit_total[0]?.count || 0;
 
   return {
     counts,
     weekCounts,
     total: Object.values(counts).reduce((a, b) => a + b, 0),
     non_override_total: nonOverrideTotal,
+    draft_edit_count: draftEditTotal,
   };
 }
 

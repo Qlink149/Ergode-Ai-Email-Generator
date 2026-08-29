@@ -118,8 +118,13 @@ function DotGrid({ className }) {
   );
 }
 
-/** The single shared-password gate in front of the whole app - see server/services/authToken.js. */
+/**
+ * Sign-in gate. Two ways in (see server/routes/auth.js):
+ *  - email + password -> a named user account
+ *  - password only    -> the shared admin login
+ */
 export default function LoginPage({ onLogin }) {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -130,7 +135,7 @@ export default function LoginPage({ onLogin }) {
     setSubmitting(true);
     setError(null);
     try {
-      await login(password);
+      await login(email.trim(), password);
       onLogin();
     } catch (err) {
       setError(err.message);
@@ -166,17 +171,35 @@ export default function LoginPage({ onLogin }) {
 
         <div className="mt-6 text-left">
           <label className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
+            Email <span className="font-normal normal-case text-[var(--muted)]">(leave blank for the shared admin login)</span>
+          </label>
+          <div className="relative mt-1">
+            <Mail size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+            <input
+              type="email"
+              autoFocus
+              autoComplete="username"
+              className="brand-input w-full rounded-lg py-2 pl-9 pr-3 text-sm"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@ergode.com"
+            />
+          </div>
+        </div>
+
+        <div className="mt-3 text-left">
+          <label className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">
             Password
           </label>
           <div className="relative mt-1">
             <Lock size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
             <input
               type="password"
-              autoFocus
+              autoComplete="current-password"
               className="brand-input w-full rounded-lg py-2 pl-9 pr-3 text-sm"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Shared team password"
+              placeholder={email.trim() ? "Your password" : "Shared team password"}
             />
           </div>
         </div>

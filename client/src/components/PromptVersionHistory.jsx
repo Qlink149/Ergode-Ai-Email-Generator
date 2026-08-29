@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, ChevronDown, ChevronRight, RotateCcw, CheckCircle2 } from "lucide-react";
 import { fetchSystemPromptVersions, fetchSystemPromptVersionContent, saveSystemPrompt } from "../api.js";
 import FormattedText from "./FormattedText.jsx";
+import { useAuth, can } from "../auth.js";
 
 function formatTimestamp(iso) {
   try {
@@ -12,6 +13,8 @@ function formatTimestamp(iso) {
 }
 
 function VersionCard({ version, index, isCurrent, onRestored }) {
+  const { me } = useAuth();
+  const canRestore = can(me, "editSystemPrompt");
   const [expanded, setExpanded] = useState(false);
   const [fullContent, setFullContent] = useState(null);
   const [contentLoading, setContentLoading] = useState(false);
@@ -96,14 +99,16 @@ function VersionCard({ version, index, isCurrent, onRestored }) {
           )}
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleRestore}
-              disabled={restoring || isCurrent || fullContent === null}
-              className="brand-button px-4 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <RotateCcw size={13} />
-              {restoring ? "Restoring..." : isCurrent ? "Already current" : `Restore v${version.version}`}
-            </button>
+            {canRestore && (
+              <button
+                onClick={handleRestore}
+                disabled={restoring || isCurrent || fullContent === null}
+                className="brand-button px-4 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RotateCcw size={13} />
+                {restoring ? "Restoring..." : isCurrent ? "Already current" : `Restore v${version.version}`}
+              </button>
+            )}
             {justRestored && (
               <span className="flex items-center gap-1.5 text-xs text-[var(--executive-success)]">
                 <CheckCircle2 size={14} />

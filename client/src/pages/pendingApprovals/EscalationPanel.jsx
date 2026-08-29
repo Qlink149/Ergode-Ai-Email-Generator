@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { MessageSquareWarning, X } from "lucide-react";
 import { overrideEscalation } from "../../api.js";
+import { useAuth, can } from "../../auth.js";
 import EscalationBadge from "../../components/EscalationBadge.jsx";
 import { CaseDetail } from "./SharedBits.jsx";
 import { formatTimestamp } from "./constants.js";
@@ -20,7 +21,7 @@ import { formatTimestamp } from "./constants.js";
  * state shown via a tinted background + bottom accent bar, same idea as
  * the filter-tab pills elsewhere on this page.
  */
-export function EscalationStatBarItem({ meta, label, value, onClick, active }) {
+export function EscalationStatBarItem({ meta, label, value, onClick, active, caption }) {
   const Icon = meta.icon;
   const clickable = typeof onClick === "function";
   return (
@@ -42,24 +43,28 @@ export function EscalationStatBarItem({ meta, label, value, onClick, active }) {
         <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">{label}</p>
       </div>
       <p className="mt-1.5 text-xl font-semibold leading-none font-display">{value}</p>
+      {caption && <p className="mt-1 truncate text-[10px] text-[var(--muted)]">{caption}</p>}
     </button>
   );
 }
 
 function OverrideForm({ escalation, onCreated }) {
+  const { me } = useAuth();
+  // Logging in already says who this is - no separate "type your name"
+  // prompt, same as EditableDraft.jsx's Edit/Comment forms.
+  const myName = me?.name || me?.email || "unknown";
   const [open, setOpen] = useState(false);
-  const [author, setAuthor] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!author.trim() || !note.trim()) return;
+    if (!note.trim()) return;
     setBusy(true);
     setError(null);
     try {
-      await overrideEscalation(escalation._id, note.trim(), author.trim());
+      await overrideEscalation(escalation._id, note.trim(), myName);
       setNote("");
       setOpen(false);
       onCreated();
@@ -79,6 +84,8 @@ function OverrideForm({ escalation, onCreated }) {
     );
   }
 
+  if (!can(me, "approveProposals")) return null;
+
   if (!open) {
     return (
       <button onClick={() => setOpen(true)} className="brand-button-ghost px-3 py-1.5 text-xs">
@@ -95,12 +102,6 @@ function OverrideForm({ escalation, onCreated }) {
         only applies to X" or "the contradiction is fine, replace the old rule with this instead." Your note goes
         straight to drafting a real fix.
       </p>
-      <input
-        className="brand-input w-full rounded-lg px-3 py-2 text-sm"
-        value={author}
-        onChange={(e) => setAuthor(e.target.value)}
-        placeholder="Your name"
-      />
       <textarea
         className="brand-input w-full rounded-lg px-3 py-2 text-sm"
         rows={3}
@@ -111,7 +112,7 @@ function OverrideForm({ escalation, onCreated }) {
       <div className="flex items-center gap-2">
         <button
           type="submit"
-          disabled={busy || !author.trim() || !note.trim()}
+          disabled={busy || !note.trim()}
           className="brand-button px-4 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? "Drafting..." : "Draft a fix from this"}

@@ -212,14 +212,19 @@ gives feedback on a draft:
 - **Comment** — `EditableDraft.jsx`'s "Comment" button. Written straight to
   `order_comments` by `server/routes/comments.js` (Node owns this collection
   directly — the only collection Node writes to besides proxying).
+  **Always triggers the triage agent.**
 - **Draft Edit** — `EditableDraft.jsx`'s "Edit" button, rewriting the draft
-  in place. Saved via `pipeline/api.py`'s `PUT /draft-edit`.
+  in place. Saved via `pipeline/api.py`'s `PUT /draft-edit`. By default this
+  is a one-off: it saves for that one reply and stops there. It triggers the
+  triage agent **only when the editor ticked "This is a permanent fix"** —
+  a checkbox that only appears for a user with the `flagPermanentFix`
+  permission, and which `server/routes/draftEdit.js` re-checks server-side
+  before forwarding `permanent_fix: true` to the pipeline.
 
-**Both automatically trigger the triage agent** — no button, no delay beyond the
-OpenAI call itself (`server/routes/comments.js` awaits `pipeline/api.py`'s
-`POST /triage`; the draft-edit path calls it internally, same process, no extra
-hop). `pipeline/triage_agent.py`'s `run_and_persist_triage()` is the shared
-entry point both paths call.
+`pipeline/triage_agent.py`'s `run_and_persist_triage()` is the shared entry
+point both paths call — no button, no delay beyond the OpenAI call itself
+(`server/routes/comments.js` awaits `pipeline/api.py`'s `POST /triage`; the
+draft-edit path calls it internally, same process, no extra hop).
 
 ```mermaid
 flowchart TD
@@ -298,17 +303,31 @@ environment, forever.
 
 ## 9. Auth
 
-One shared password for the whole app — **no per-user accounts or roles**.
-`server/services/authToken.js` (Node) and `pipeline/auth_token.py` (Python) both
-compute the same deterministic token (`sha256(password + secret)`), so a token
-issued by one is valid against the other. Practically: "approve a proposal"
-means *anyone with the shared password*, not a distinct admin role — there isn't
-one yet.
+**Two ways to log in, both landing on a token the browser sends as a bearer:**
 
-In production, `pipeline/api.py`'s routes also carry their own
-`require_auth` dependency, because Vercel's routing (`vercel.json`) sends
-`/pyapi/(.*)` straight to the pipeline, completely bypassing Express's own auth
-middleware.
+1. **Shared password** (`APP_LOGIN_PASSWORD`) — issues the original
+   deterministic `sha256(password + secret)` token and logs you in as
+   **admin: every permission, every tab**. Always available, nothing to set
+   up. `server/services/authToken.js` (Node) and `pipeline/auth_token.py`
+   (Python) both compute it, so it's also what the Node server uses for its
+   own server-to-server calls into the pipeline.
+2. **Named user** (email + password) — checked against the `users`
+   collection (bcrypt), issues a signed **JWT** (HS256, same
+   `AUTH_TOKEN_SECRET`) carrying that user's resolved permissions. Created
+   and managed from the **User Management** tab (`server/routes/users.js`,
+   gated on `manageUsers`).
+
+`server/server.js`'s `/api` middleware accepts either, sets `req.user`
+(`kind: "admin" | "user"`, plus `perms`), and `requirePerm(key)`
+(`server/services/permissions.js`) gates the individual actions:
+`approveProposals`, `editSystemPrompt`, `flagPermanentFix`, `manageUsers`.
+The client hides UI it can't use (`client/src/auth.js`'s `useAuth`/`can`),
+but the server check is the real boundary.
+
+The **pipeline's** `require_auth` is unchanged — it only ever sees the
+shared token (Node never forwards a user JWT to it), and in production it
+still enforces that itself because `vercel.json` routes `/pyapi/(.*)`
+straight past Express.
 
 ## 10. Local development
 
