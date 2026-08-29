@@ -116,13 +116,20 @@ client/src/
 server/
   server.js                mounts every route, single shared-password auth middleware
   db.js                    lazy MongoDB connection singleton (Node side)
-  routes/                  one file per resource; generate.js/systemPrompt.js/draftEdit.js/
-                            proposals.js/escalations.js/notifications.js are pure proxies to
-                            the pipeline; comments.js and orderLookup.js do real work
+  routes/                  one file per resource. generate.js/translate.js/draftEdit.js
+                            and proposals' approve|reject / escalations' override still
+                            proxy to the pipeline (they need OpenAI). Everything else -
+                            all read endpoints, plus the whole system_prompts collection
+                            (systemPrompt.js) - reads/writes Mongo directly from Node, so
+                            a page load never pays the Python cold start. comments.js and
+                            orderLookup.js do real work.
   services/
     orderApiClient.js, crmThreadApiClient.js   the real external integrations
     disclosureClassifier.js                    decides which order fields are customer-safe
     authToken.js                               shared-password → deterministic token
+    proposalStore.js, escalationStore.js, systemPromptStore.js
+                                               Node-side copies of the pipeline stores'
+                                               read/append logic, to skip the Python hop
 
 pipeline/
   api.py                   all HTTP routes (FastAPI), mounted twice — see §6
@@ -297,18 +304,24 @@ middleware.
 
 ## 10. Local development
 
-Three processes, three ports (see `.env` for the real values used):
+Still three processes on three ports, but two commands (see `.env` for the
+real port values):
 
 ```bash
-# pipeline (FastAPI) — port 8001 by default
-cd pipeline && uvicorn api:app --port 8001 --reload
+# client (Vite, :5173) + server (Express, :4000) together, from the repo root.
+# One-time: `npm install` at the root for concurrently, plus the usual
+# `npm install` in client/ and server/ (or just `npm run install:all`).
+npm run dev
 
-# server (Express) — port 4000 by default, proxies to the pipeline above
-cd server && node server.js
-
-# client (Vite) — port 5173, proxies /api to the server above
-cd client && npx vite
+# pipeline (FastAPI, :8001) — the one Python piece, its own command so the
+# venv / interpreter stays separate
+python pipeline/app.py
 ```
+
+`npm run dev:all` runs all three at once if you'd rather have one terminal.
+Production (Vercel) ignores all of this — it loads `server/server.js` and
+`pipeline/api.py` directly (root `vercel.json`); `pipeline/app.py` is a
+local-only uvicorn wrapper.
 
 Needs a `.env` at the repo root with at minimum `MONGODB_URI`,
 `OPENAI_API_KEY`, `APP_LOGIN_PASSWORD`, `AUTH_TOKEN_SECRET`. Because local dev

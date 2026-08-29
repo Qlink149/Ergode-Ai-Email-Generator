@@ -1,7 +1,7 @@
 import { useId, useState } from "react";
 import { Lock, Mail, Sparkles, BarChart3, Send } from "lucide-react";
 import { login } from "../api.js";
-import logo from "../logo.png";
+import logo from "../logo.webp";
 
 /** A small floating icon card, purely decorative. */
 function IconChip({ icon: Icon, className, rotate = 0 }) {

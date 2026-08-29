@@ -39,9 +39,20 @@ function cleanThread(thread) {
 router.get("/:orderId", async (req, res) => {
   const { orderId } = req.params;
 
+  // Fire both upstream calls at once instead of Order-then-CRM in series -
+  // the CRM Thread API has been observed taking 100s+ on some orders, and
+  // there's no reason to make the (usually fast) Order API wait behind it.
+  // A bad order id occasionally wastes one CRM call; a good one (the common
+  // case) now costs max(order, crm) instead of order + crm.
+  const orderPromise = fetchOrderDetails(orderId);
+  const threadSettled = fetchThreadContext({ orderId })
+    .then(cleanThread)
+    .then((thread) => ({ thread, threadError: null }))
+    .catch((err) => ({ thread: null, threadError: err.message }));
+
   let rawOrder;
   try {
-    rawOrder = await fetchOrderDetails(orderId);
+    rawOrder = await orderPromise;
   } catch (err) {
     return res.status(502).json({ error: `Order API: ${err.message}` });
   }
@@ -50,13 +61,7 @@ router.get("/:orderId", async (req, res) => {
     return res.status(404).json({ error: `No order found for id ${orderId}` });
   }
 
-  let thread = null;
-  let threadError = null;
-  try {
-    thread = cleanThread(await fetchThreadContext({ orderId }));
-  } catch (err) {
-    threadError = err.message;
-  }
+  const { thread, threadError } = await threadSettled;
 
   res.json({
     order_id: orderId,

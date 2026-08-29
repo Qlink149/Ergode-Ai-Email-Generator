@@ -18,7 +18,12 @@ function getClient() {
     throw new Error("MONGODB_URI is not configured.");
   }
   if (!clientPromise) {
-    clientPromise = new MongoClient(process.env.MONGODB_URI).connect();
+    clientPromise = new MongoClient(process.env.MONGODB_URI, {
+      // Fail fast on a momentary Atlas hiccup instead of hanging on the
+      // 30s driver default - a stalled request is worse than a clear error.
+      serverSelectionTimeoutMS: 5000,
+      maxPoolSize: 10,
+    }).connect();
   }
   return clientPromise;
 }

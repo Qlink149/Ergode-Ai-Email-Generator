@@ -6,11 +6,12 @@ import PromptVersionHistory from "../components/PromptVersionHistory.jsx";
 /**
  * SystemPromptPage.jsx
  * ---------------------
- * View and edit the live system prompt. Saving writes straight to
- * MongoDB's "system_prompts" collection through the pipeline service, and
- * because draft_generator.py reads the latest version fresh on every
- * call, the very next "Generate with AI" request uses the edited version
- * - nothing else needs restarting.
+ * View and edit the live system prompt. Loading and saving both go
+ * straight to MongoDB's "system_prompts" collection from the Node server
+ * (server/services/systemPromptStore.js) - no Python hop. Because
+ * draft_generator.py reads the latest version fresh from that same
+ * collection on every call, the very next "Generate with AI" request uses
+ * the edited version - nothing else needs restarting.
  */
 
 export default function SystemPromptPage() {

@@ -7,7 +7,7 @@
  * about any of the background/header styling.
  */
 
-import logo from "../logo.png";
+import logo from "../logo.webp";
 import NotificationBell from "./NotificationBell.jsx";
 
 export default function AppShell({ badge, title, description, onLogout, onNavigateToApprovals, children }) {

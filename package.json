@@ -1,0 +1,14 @@
+{
+  "name": "ergode-email-intelligence",
+  "private": true,
+  "description": "Root dev-runner. Real code lives in client/, server/, pipeline/.",
+  "scripts": {
+    "dev": "concurrently -k -n client,server -c cyan,green \"npm --prefix client run dev\" \"npm --prefix server run dev\"",
+    "dev:all": "concurrently -k -n client,server,pipeline -c cyan,green,magenta \"npm --prefix client run dev\" \"npm --prefix server run dev\" \"npm run pipeline\"",
+    "pipeline": "python pipeline/app.py",
+    "install:all": "npm install && npm --prefix client install && npm --prefix server install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

@@ -20,7 +20,8 @@ Collections:
                        (written by escalation_store.py)
 """
 
-from pymongo import ASCENDING, DESCENDING, MongoClient
+from pymongo import ASCENDING, DESCENDING, IndexModel, MongoClient
+from pymongo.errors import PyMongoError
 
 from config import MONGODB_URI, MONGODB_DB_NAME
 
@@ -34,7 +35,11 @@ def _ensure_indexes(db) -> None:
     Vercel/MongoDB performance audit) - nothing speculative. create_index()
     is idempotent (a no-op if the index already exists with the same spec),
     so it's safe to call on every cold start rather than needing a separate
-    migration step.
+    migration step. Batched into one createIndexes command per collection
+    (not one round trip per index) so it adds ~5 round trips to a cold
+    start, not ~8, and wrapped so a transient index error can never block
+    the request that triggered it - the indexes already exist in any
+    long-lived environment, this is just belt-and-braces for a fresh DB.
 
     - system_prompts: load_system_prompt()/get_system_prompt_version()/
       save_system_prompt() all do find_one({}, sort=[("version", -1)]) -
@@ -51,18 +56,33 @@ def _ensure_indexes(db) -> None:
       .limit(200) - the index lets Mongo satisfy that from the index
       instead of an in-memory sort of every comment ever made.
     """
-    db["system_prompts"].create_index([("version", DESCENDING)])
-
-    db["prompt_proposals"].create_index([("status", ASCENDING), ("created_at", DESCENDING)])
-    db["prompt_proposals"].create_index([("created_at", DESCENDING)])
-
-    db["escalations"].create_index([("status", ASCENDING), ("created_at", DESCENDING)])
-    db["escalations"].create_index([("type", ASCENDING), ("created_at", DESCENDING)])
-    db["escalations"].create_index([("created_at", DESCENDING)])
-
-    db["ai_drafts"].create_index([("thread_id", ASCENDING), ("seq", ASCENDING), ("generated_at", DESCENDING)])
-
-    db["order_comments"].create_index([("created_at", DESCENDING)])
+    per_collection = {
+        "system_prompts": [
+            IndexModel([("version", DESCENDING)]),
+        ],
+        "prompt_proposals": [
+            IndexModel([("status", ASCENDING), ("created_at", DESCENDING)]),
+            IndexModel([("created_at", DESCENDING)]),
+        ],
+        "escalations": [
+            IndexModel([("status", ASCENDING), ("created_at", DESCENDING)]),
+            IndexModel([("type", ASCENDING), ("created_at", DESCENDING)]),
+            IndexModel([("created_at", DESCENDING)]),
+        ],
+        "ai_drafts": [
+            IndexModel([("thread_id", ASCENDING), ("seq", ASCENDING), ("generated_at", DESCENDING)]),
+        ],
+        "order_comments": [
+            IndexModel([("created_at", DESCENDING)]),
+        ],
+    }
+    try:
+        for name, models in per_collection.items():
+            db[name].create_indexes(models)
+    except PyMongoError:
+        # Already-existing indexes are a no-op; a transient failure here must
+        # never turn into a failed request - the next cold start retries.
+        pass
 
 
 def get_db():
@@ -82,7 +102,9 @@ def get_db():
         # attach real UTC tzinfo, so the JSON comes out with a proper "+00:00"
         # and the browser converts it to local time correctly instead of
         # misreading it as already-local.
-        _client = MongoClient(MONGODB_URI, tz_aware=True)
+        # serverSelectionTimeoutMS: fail fast on a momentary Atlas hiccup
+        # instead of hanging on the 30s driver default.
+        _client = MongoClient(MONGODB_URI, tz_aware=True, serverSelectionTimeoutMS=5000, maxPoolSize=10)
     db = _client[MONGODB_DB_NAME]
     if not _indexes_ready:
         _ensure_indexes(db)
